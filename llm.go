@@ -62,33 +62,41 @@ func (a *App) StartServer() error {
 		return nil
 	}
 
-	modelPath := filepath.Join("gguf", a.config.ModelPath)
-	if _, err := os.Stat(modelPath); err != nil {
-		return fmt.Errorf("model not found: %s", modelPath)
+	absModelPath, _ := filepath.Abs(filepath.Join("gguf", a.config.ModelPath))
+	if _, err := os.Stat(absModelPath); err != nil {
+		return fmt.Errorf("model not found: %s", absModelPath)
 	}
 
 	executable := "llama-server"
 	if runtime.GOOS == "windows" {
 		executable = "llama-server.exe"
 	}
-	execPath := filepath.Join("llama", executable)
+
+	llamaDir, _ := filepath.Abs("llama")
+	execPath := filepath.Join(llamaDir, executable)
+
+	if _, err := os.Stat(execPath); err != nil {
+		return fmt.Errorf("llama-server not found at %s. Please ensure the 'llama' folder contains the executable.", execPath)
+	}
 
 	args := []string{
-		"-m", modelPath,
+		"-m", absModelPath,
 		"--port", "8080",
 		"-ngl", fmt.Sprintf("%d", a.config.GPULayers),
+		"--host", "127.0.0.1",
 	}
 
 	if a.config.ClipPath != "" {
-		clipPath := filepath.Join("clip", a.config.ClipPath)
+		clipPath, _ := filepath.Abs(filepath.Join("clip", a.config.ClipPath))
 		if _, err := os.Stat(clipPath); err == nil {
 			args = append(args, "--mmproj", clipPath)
 		}
 	}
 
-	a.logDebug(fmt.Sprintf("Starting server: %s %s", execPath, strings.Join(args, " ")))
+	a.logDebug(fmt.Sprintf("Starting server in %s: %s %s", llamaDir, execPath, strings.Join(args, " ")))
 
 	cmd := exec.Command(execPath, args...)
+	cmd.Dir = llamaDir // Set working directory so it finds DLLs
 
 	// Hide window on Windows
 	cmd.SysProcAttr = getSysProcAttr()
