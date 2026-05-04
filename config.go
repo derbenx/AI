@@ -35,10 +35,18 @@ func LoadConfig() Config {
 		return defaultConfig
 	}
 
-	var config Config
+	config := defaultConfig
 	err = json.Unmarshal(data, &config)
 	if err != nil {
 		return defaultConfig
+	}
+
+	// Ensure critical defaults
+	if config.ServerURL == "" {
+		config.ServerURL = defaultConfig.ServerURL
+	}
+	if config.ServerMode == "" {
+		config.ServerMode = defaultConfig.ServerMode
 	}
 
 	return config

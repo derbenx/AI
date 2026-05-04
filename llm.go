@@ -200,6 +200,15 @@ func (a *App) isLocalServer() bool {
 	return a.config.ServerMode == "local"
 }
 
+func (a *App) getURL(path string) string {
+	url := a.config.ServerURL
+	if url == "" {
+		url = "http://127.0.0.1:8080"
+	}
+	url = strings.TrimSuffix(url, "/")
+	return url + path
+}
+
 func (a *App) SendMessage(text string, imagePath string) error {
 	if a.server == nil && a.isLocalServer() {
 		return fmt.Errorf("Server not running. Please start a llama_server from the Server tab.")
@@ -243,7 +252,7 @@ func (a *App) SendMessage(text string, imagePath string) error {
 	}
 
 	jsonBody, _ := json.Marshal(reqBody)
-	resp, err := http.Post(a.config.ServerURL+"/v1/chat/completions", "application/json", bytes.NewBuffer(jsonBody))
+	resp, err := http.Post(a.getURL("/v1/chat/completions"), "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}

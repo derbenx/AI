@@ -3,6 +3,15 @@ import {EventsOn, BrowserOpenURL} from '../wailsjs/runtime/runtime';
 
 let currentImagePath = "";
 
+function showNotification(message, duration = 3000) {
+    const el = document.getElementById('notification');
+    el.textContent = message;
+    el.classList.add('show');
+    setTimeout(() => {
+        el.classList.remove('show');
+    }, duration);
+}
+
 // Tab switching
 window.showTab = function(element, tabName) {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -228,14 +237,14 @@ async function updateServerStatus(statusText) {
 document.getElementById('start-server-btn').onclick = async () => {
     const hasServer = await CheckServerExecutable();
     if (!hasServer) {
-        alert('llama-server.exe or ggml-*.dll missing in llama/ folder. Copy all files from the llama.cpp zip.');
+        showNotification('llama-server.exe or ggml-*.dll missing in llama/ folder. Copy all files from the llama.cpp zip.');
         return;
     }
     try {
         await StartServer();
         await updateServerStatus();
     } catch (err) {
-        alert(`Error: ${err}`);
+        showNotification(`Error: ${err}`);
     }
 };
 
@@ -255,13 +264,16 @@ document.getElementById('test-connection-btn').onclick = async () => {
         if (resp.ok) {
             status.textContent = "✅ Connected Successfully";
             status.style.color = "#44ff44";
+            showNotification("Connected Successfully");
         } else {
             status.textContent = `❌ Server returned error: ${resp.status}`;
             status.style.color = "#ff4444";
+            showNotification("Server returned error");
         }
     } catch (err) {
         status.textContent = `❌ Failed to connect: ${err}`;
         status.style.color = "#ff4444";
+        showNotification("Failed to connect");
     }
 };
 
@@ -278,7 +290,7 @@ document.getElementById('save-settings-btn').onclick = async () => {
         server_mode: document.getElementById('server-mode').value,
     };
     const result = await SaveSettings(config);
-    alert(result);
+    showNotification(result);
 };
 
 // Intercept link clicks to open in external browser
