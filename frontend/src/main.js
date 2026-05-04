@@ -1,5 +1,5 @@
 import {GetSpecs, GetConfig, SaveSettings, ListModels, ListClips, GetBalancedLayers, SendMessage, ClearHistory, CheckServerExecutable, StartServer, StopServer, IsServerRunning} from '../wailsjs/go/main/App';
-import {EventsOn} from '../wailsjs/runtime/runtime';
+import {EventsOn, BrowserOpenURL} from '../wailsjs/runtime/runtime';
 
 let currentImagePath = "";
 
@@ -203,5 +203,14 @@ document.getElementById('save-settings-btn').onclick = async () => {
     const result = await SaveSettings(config);
     alert(result);
 };
+
+// Intercept link clicks to open in external browser
+document.addEventListener('click', (e) => {
+    const link = e.target.closest('a');
+    if (link && link.href && (link.href.startsWith('http://') || link.href.startsWith('https://'))) {
+        e.preventDefault();
+        BrowserOpenURL(link.href);
+    }
+});
 
 initSettings();

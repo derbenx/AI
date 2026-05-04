@@ -106,16 +106,28 @@ func (a *App) StartServer() error {
 	}
 
 	// Wait for server to be ready
+	started := false
 	for i := 0; i < 30; i++ {
-		resp, err := http.Get("http://localhost:8080/health")
+		// Check if process is still running
+		if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
+			return fmt.Errorf("llama-server exited prematurely. Check llama-server.log for details.")
+		}
+
+		resp, err := http.Get("http://127.0.0.1:8080/health")
 		if err == nil {
 			status := resp.StatusCode
 			resp.Body.Close()
 			if status == http.StatusOK {
+				started = true
 				break
 			}
 		}
 		time.Sleep(1 * time.Second)
+	}
+
+	if !started {
+		cmd.Process.Kill()
+		return fmt.Errorf("llama-server failed to start within 30 seconds")
 	}
 
 	a.server = &LLMServer{cmd: cmd}
@@ -184,7 +196,7 @@ func (a *App) SendMessage(text string, imagePath string) error {
 	}
 
 	jsonBody, _ := json.Marshal(reqBody)
-	resp, err := http.Post("http://localhost:8080/v1/chat/completions", "application/json", bytes.NewBuffer(jsonBody))
+	resp, err := http.Post("http://127.0.0.1:8080/v1/chat/completions", "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}
