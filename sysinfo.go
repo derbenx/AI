@@ -30,16 +30,22 @@ func GetSystemSpecs() (SystemSpecs, error) {
 	return specs, nil
 }
 
+func runWmic(args ...string) ([]byte, error) {
+	cmd := exec.Command("wmic", args...)
+	cmd.SysProcAttr = getSysProcAttr()
+	return cmd.Output()
+}
+
 func getWindowsSpecs(specs SystemSpecs) (SystemSpecs, error) {
 	// CPU
-	out, _ := exec.Command("wmic", "cpu", "get", "name").Output()
+	out, _ := runWmic("cpu", "get", "name")
 	lines := strings.Split(string(out), "\n")
 	if len(lines) > 1 {
 		specs.CPU = strings.TrimSpace(lines[1])
 	}
 
 	// Total RAM
-	out, _ = exec.Command("wmic", "computersystem", "get", "totalphysicalmemory").Output()
+	out, _ = runWmic("computersystem", "get", "totalphysicalmemory")
 	lines = strings.Split(string(out), "\n")
 	if len(lines) > 1 {
 		memStr := strings.TrimSpace(lines[1])
@@ -49,7 +55,7 @@ func getWindowsSpecs(specs SystemSpecs) (SystemSpecs, error) {
 
 	// GPU and VRAM
 	// Note: wmic might return multiple GPUs, we try to find the one with most VRAM or just the first dedicated one
-	out, _ = exec.Command("wmic", "path", "win32_VideoController", "get", "name,AdapterRAM").Output()
+	out, _ = runWmic("path", "win32_VideoController", "get", "name,AdapterRAM")
 	lines = strings.Split(string(out), "\n")
 	if len(lines) > 1 {
 		// Example output:

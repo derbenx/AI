@@ -16,6 +16,7 @@ type Config struct {
 	DebugLog            bool   `json:"debug_log"`
 	GPULayers           int    `json:"gpu_layers"`
 	ServerURL           string `json:"server_url"`
+	ServerMode          string `json:"server_mode"` // "local" or "remote"
 }
 
 var defaultConfig = Config{
@@ -25,6 +26,7 @@ var defaultConfig = Config{
 	DebugLog:      true,
 	GPULayers:     0,
 	ServerURL:     "http://127.0.0.1:8080",
+	ServerMode:    "local",
 }
 
 func LoadConfig() Config {

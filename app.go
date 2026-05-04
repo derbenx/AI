@@ -100,10 +100,10 @@ func (a *App) SaveSettings(config Config) string {
 		return fmt.Sprintf("Error saving config: %v", err)
 	}
 
-	// If the URL changed to remote, stop local server
-	if oldURL != config.ServerURL && !a.isLocalServer() && a.IsServerRunning() {
+	// If the mode changed to remote, stop local server
+	if a.config.ServerMode == "remote" && a.IsServerRunning() {
 		a.StopServer()
-		return "Settings saved. Switched to remote server (local server stopped)."
+		return "Settings saved. Switched to remote mode (local server stopped)."
 	}
 
 	// If model or heavy settings changed, restart local server

@@ -147,17 +147,21 @@ async function initSettings() {
     document.getElementById('debug-log').checked = config.debug_log;
     document.getElementById('gpu-layers').value = config.gpu_layers;
     document.getElementById('server-url').value = config.server_url;
+    document.getElementById('server-mode').value = config.server_mode;
 
-    const updateLocalOnly = () => {
-        const url = document.getElementById('server-url').value;
-        const isLocal = url.includes('localhost') || url.includes('127.0.0.1');
+    const updateModeUI = () => {
+        const mode = document.getElementById('server-mode').value;
+        const isLocal = mode === 'local';
+
         document.querySelectorAll('.local-only').forEach(el => {
-            el.style.opacity = isLocal ? '1' : '0.5';
-            el.style.pointerEvents = isLocal ? 'auto' : 'none';
+            el.style.display = isLocal ? 'flex' : 'none';
+        });
+        document.querySelectorAll('.remote-only').forEach(el => {
+            el.style.display = isLocal ? 'none' : 'flex';
         });
     };
-    document.getElementById('server-url').oninput = updateLocalOnly;
-    updateLocalOnly();
+    document.getElementById('server-mode').onchange = updateModeUI;
+    updateModeUI();
 
     const models = await ListModels();
     const modelSelect = document.getElementById('model-select');
@@ -214,6 +218,27 @@ document.getElementById('stop-server-btn').onclick = async () => {
     await updateServerStatus();
 };
 
+document.getElementById('test-connection-btn').onclick = async () => {
+    const url = document.getElementById('server-url').value;
+    const status = document.getElementById('connection-status');
+    status.textContent = "Testing...";
+    status.style.color = "white";
+
+    try {
+        const resp = await fetch(url + "/health");
+        if (resp.ok) {
+            status.textContent = "✅ Connected Successfully";
+            status.style.color = "#44ff44";
+        } else {
+            status.textContent = `❌ Server returned error: ${resp.status}`;
+            status.style.color = "#ff4444";
+        }
+    } catch (err) {
+        status.textContent = `❌ Failed to connect: ${err}`;
+        status.style.color = "#ff4444";
+    }
+};
+
 document.getElementById('save-settings-btn').onclick = async () => {
     const config = {
         model_path: document.getElementById('model-select').value,
@@ -224,6 +249,7 @@ document.getElementById('save-settings-btn').onclick = async () => {
         debug_log: document.getElementById('debug-log').checked,
         gpu_layers: parseInt(document.getElementById('gpu-layers').value),
         server_url: document.getElementById('server-url').value,
+        server_mode: document.getElementById('server-mode').value,
     };
     const result = await SaveSettings(config);
     alert(result);

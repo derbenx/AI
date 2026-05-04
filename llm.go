@@ -159,7 +159,7 @@ func (a *App) IsServerRunning() bool {
 }
 
 func (a *App) isLocalServer() bool {
-	return strings.Contains(a.config.ServerURL, "localhost") || strings.Contains(a.config.ServerURL, "127.0.0.1")
+	return a.config.ServerMode == "local"
 }
 
 func (a *App) SendMessage(text string, imagePath string) error {

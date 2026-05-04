@@ -40,8 +40,19 @@
     <div id="settings-tab" class="tab-content">
         <h2>Settings</h2>
         <div class="setting-group">
+            <label>Server Mode:</label>
+            <select id="server-mode">
+                <option value="local">Local (This PC)</option>
+                <option value="remote">Remote (Network)</option>
+            </select>
+        </div>
+        <div class="setting-group remote-only">
             <label>Server URL:</label>
-            <input type="text" id="server-url" placeholder="http://127.0.0.1:8080">
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="server-url" placeholder="http://127.0.0.1:8080" style="flex: 1;">
+                <button id="test-connection-btn">Test</button>
+            </div>
+            <small id="connection-status" style="margin-top: 5px;"></small>
         </div>
         <div class="setting-group local-only">
             <label>Model (gguf/):</label>
