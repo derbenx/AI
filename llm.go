@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/exec"
@@ -58,9 +59,11 @@ type LLMServer struct {
 }
 
 func (a *App) StartServer() error {
-	if a.server != nil {
+	if a.server != nil || a.isStarting {
 		return nil
 	}
+	a.isStarting = true
+	defer func() { a.isStarting = false }()
 
 	absModelPath, _ := filepath.Abs(filepath.Join("gguf", a.config.ModelPath))
 	if _, err := os.Stat(absModelPath); err != nil {
@@ -110,40 +113,61 @@ func (a *App) StartServer() error {
 		return err
 	}
 
-	// Stream logs to frontend
-	go func() {
-		scanner := bufio.NewScanner(stdout)
+	readyChan := make(chan bool, 1)
+
+	// Stream logs to frontend and watch for "listening" message
+	scanLogs := func(r io.Reader) {
+		scanner := bufio.NewScanner(r)
 		for scanner.Scan() {
-			wailsruntime.EventsEmit(a.ctx, "server-log", scanner.Text())
+			line := scanner.Text()
+			wailsruntime.EventsEmit(a.ctx, "server-log", line)
+			if strings.Contains(line, "server is listening on") {
+				select {
+				case readyChan <- true:
+				default:
+				}
+			}
 		}
-	}()
+	}
+
+	go scanLogs(stdout)
+	go scanLogs(stderr)
+
+	// Background HTTP health check
 	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			wailsruntime.EventsEmit(a.ctx, "server-log", scanner.Text())
+		for i := 0; i < 300; i++ {
+			resp, err := http.Get(a.config.ServerURL + "/health")
+			if err == nil {
+				status := resp.StatusCode
+				resp.Body.Close()
+				if status == http.StatusOK {
+					select {
+					case readyChan <- true:
+					default:
+					}
+					return
+				}
+			}
+			time.Sleep(1 * time.Second)
 		}
 	}()
 
 	// Wait for server to be ready (longer timeout for old hardware)
-	started := false
 	wailsruntime.EventsEmit(a.ctx, "server-status", "Booting...")
 
-	for i := 0; i < 300; i++ {
-		// Check if process is still running
-		if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-			return fmt.Errorf("llama-server exited prematurely. Check logs in the Server tab.")
-		}
+	started := false
+	timeout := time.After(300 * time.Second)
 
-		resp, err := http.Get(a.config.ServerURL + "/health")
-		if err == nil {
-			status := resp.StatusCode
-			resp.Body.Close()
-			if status == http.StatusOK {
-				started = true
-				break
-			}
-		}
-		time.Sleep(1 * time.Second)
+	select {
+	case <-readyChan:
+		started = true
+	case <-timeout:
+		started = false
+	}
+
+	// Double check if process is still running
+	if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
+		return fmt.Errorf("llama-server exited prematurely. Check logs in the Server tab.")
 	}
 
 	if !started {
@@ -178,10 +202,7 @@ func (a *App) isLocalServer() bool {
 
 func (a *App) SendMessage(text string, imagePath string) error {
 	if a.server == nil && a.isLocalServer() {
-		err := a.StartServer()
-		if err != nil {
-			return err
-		}
+		return fmt.Errorf("Server not running. Please start a llama_server from the Server tab.")
 	}
 
 	var content []any

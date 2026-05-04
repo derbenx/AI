@@ -19,6 +19,7 @@ type App struct {
 	config       Config
 	specs        SystemSpecs
 	server       *LLMServer
+	isStarting   bool
 	interactions []Interaction
 }
 
