@@ -57,16 +57,21 @@ type LLMServer struct {
 	cmd *exec.Cmd
 }
 
-func (a *App) startServer() error {
+func (a *App) StartServer() error {
+	if a.server != nil {
+		return nil
+	}
+
 	modelPath := filepath.Join("gguf", a.config.ModelPath)
 	if _, err := os.Stat(modelPath); err != nil {
 		return fmt.Errorf("model not found: %s", modelPath)
 	}
 
-	executable := "./llama-server"
+	executable := "llama-server"
 	if runtime.GOOS == "windows" {
 		executable = "llama-server.exe"
 	}
+	execPath := filepath.Join("llama", executable)
 
 	args := []string{
 		"-m", modelPath,
@@ -81,9 +86,13 @@ func (a *App) startServer() error {
 		}
 	}
 
-	a.logDebug(fmt.Sprintf("Starting server: %s %s", executable, strings.Join(args, " ")))
+	a.logDebug(fmt.Sprintf("Starting server: %s %s", execPath, strings.Join(args, " ")))
 
-	cmd := exec.Command(executable, args...)
+	cmd := exec.Command(execPath, args...)
+
+	// Hide window on Windows
+	cmd.SysProcAttr = getSysProcAttr()
+
 	// Redirect output to debug log or discard
 	if a.config.DebugLog {
 		f, _ := os.OpenFile("llama-server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -113,7 +122,7 @@ func (a *App) startServer() error {
 	return nil
 }
 
-func (a *App) stopServer() {
+func (a *App) StopServer() {
 	if a.server != nil && a.server.cmd != nil {
 		if runtime.GOOS == "windows" {
 			a.server.cmd.Process.Kill()
@@ -121,12 +130,17 @@ func (a *App) stopServer() {
 			a.server.cmd.Process.Signal(os.Interrupt)
 		}
 		a.server = nil
+		a.logDebug("Server stopped")
 	}
+}
+
+func (a *App) IsServerRunning() bool {
+	return a.server != nil
 }
 
 func (a *App) SendMessage(text string, imagePath string) error {
 	if a.server == nil {
-		err := a.startServer()
+		err := a.StartServer()
 		if err != nil {
 			return err
 		}

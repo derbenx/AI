@@ -1,15 +1,15 @@
-import {GetSpecs, GetConfig, SaveSettings, ListModels, ListClips, GetBalancedLayers, SendMessage, ClearHistory} from '../wailsjs/go/main/App';
+import {GetSpecs, GetConfig, SaveSettings, ListModels, ListClips, GetBalancedLayers, SendMessage, ClearHistory, CheckServerExecutable, StartServer, StopServer, IsServerRunning} from '../wailsjs/go/main/App';
 import {EventsOn} from '../wailsjs/runtime/runtime';
 
 let currentImagePath = "";
 
 // Tab switching
-window.showTab = function(tabName) {
+window.showTab = function(element, tabName) {
     document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
     document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
 
     document.getElementById(`${tabName}-tab`).classList.add('active');
-    event.target.classList.add('active');
+    element.classList.add('active');
 }
 
 // Drag & Drop
@@ -99,6 +99,12 @@ sendBtn.onclick = async () => {
     const text = chatInput.value.trim();
     if (!text && !currentImagePath) return;
 
+    const hasServer = await CheckServerExecutable();
+    if (!hasServer) {
+        appendMessage('ai', '### ⚠️ Missing llama-server.exe\n\nPlease place `llama-server.exe` from the [llama.cpp releases](https://github.com/ggerganov/llama.cpp/releases) into the `llama/` folder to start chatting.');
+        return;
+    }
+
     appendMessage('user', text);
     chatInput.value = "";
 
@@ -154,7 +160,35 @@ async function initSettings() {
         document.getElementById('balanced-recommend').textContent = balanced;
     };
     modelSelect.onchange();
+
+    await updateServerStatus();
 }
+
+async function updateServerStatus() {
+    const running = await IsServerRunning();
+    const status = document.getElementById('server-status');
+    status.textContent = running ? 'Running' : 'Stopped';
+    status.style.color = running ? '#44ff44' : '#ff4444';
+}
+
+document.getElementById('start-server-btn').onclick = async () => {
+    const hasServer = await CheckServerExecutable();
+    if (!hasServer) {
+        alert('llama-server.exe not found in llama/ folder');
+        return;
+    }
+    try {
+        await StartServer();
+        await updateServerStatus();
+    } catch (err) {
+        alert(`Error: ${err}`);
+    }
+};
+
+document.getElementById('stop-server-btn').onclick = async () => {
+    await StopServer();
+    await updateServerStatus();
+};
 
 document.getElementById('save-settings-btn').onclick = async () => {
     const config = {

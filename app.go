@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -25,6 +26,16 @@ func NewApp() *App {
 
 // startup is called when the app starts. The context is saved
 // so we can call the runtime methods
+func (a *App) CheckServerExecutable() bool {
+	executable := "llama-server"
+	if runtime.GOOS == "windows" {
+		executable = "llama-server.exe"
+	}
+	execPath := filepath.Join("llama", executable)
+	_, err := os.Stat(execPath)
+	return err == nil
+}
+
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.config = LoadConfig()
@@ -46,7 +57,7 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) shutdown(ctx context.Context) {
-	a.stopServer()
+	a.StopServer()
 }
 
 func (a *App) GetSpecs() SystemSpecs {
