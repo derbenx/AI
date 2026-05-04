@@ -2,10 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
+	"time"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -32,8 +35,25 @@ func (a *App) CheckServerExecutable() bool {
 		executable = "llama-server.exe"
 	}
 	execPath := filepath.Join("llama", executable)
-	_, err := os.Stat(execPath)
-	return err == nil
+	if _, err := os.Stat(execPath); err != nil {
+		return false
+	}
+
+	// Check for modular backends on Windows (newer llama.cpp versions)
+	if runtime.GOOS == "windows" {
+		files, err := os.ReadDir("llama")
+		if err == nil {
+			for _, f := range files {
+				if strings.HasPrefix(f.Name(), "ggml-") && strings.HasSuffix(f.Name(), ".dll") {
+					return true
+				}
+			}
+		}
+		// If no ggml-*.dll found, it might be an older static build, or it's missing backends.
+		// We'll return true but the log will show the error if it fails to load.
+	}
+
+	return true
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -69,11 +89,33 @@ func (a *App) GetConfig() Config {
 }
 
 func (a *App) SaveSettings(config Config) string {
+	oldModel := a.config.ModelPath
+	oldLayers := a.config.GPULayers
+	oldClip := a.config.ClipPath
+	oldURL := a.config.ServerURL
+
 	a.config = config
 	err := SaveConfig(config)
 	if err != nil {
 		return fmt.Sprintf("Error saving config: %v", err)
 	}
+
+	// If the URL changed to remote, stop local server
+	if oldURL != config.ServerURL && !a.isLocalServer() && a.IsServerRunning() {
+		a.StopServer()
+		return "Settings saved. Switched to remote server (local server stopped)."
+	}
+
+	// If model or heavy settings changed, restart local server
+	if (oldModel != config.ModelPath || oldLayers != config.GPULayers || oldClip != config.ClipPath || oldURL != config.ServerURL) && a.IsServerRunning() && a.isLocalServer() {
+		a.StopServer()
+		go func() {
+			time.Sleep(1 * time.Second)
+			a.StartServer()
+		}()
+		return "Settings saved. Server is restarting with new model/settings..."
+	}
+
 	return "Settings saved"
 }
 
@@ -95,4 +137,31 @@ func (a *App) GetBalancedLayers(modelName string) int {
 	}
 	sizeGB := float64(info.Size()) / (1024 * 1024 * 1024)
 	return a.specs.CalculateBalancedGPU(sizeGB)
+}
+
+func (a *App) GetImageBase64(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	mime := "image/jpeg"
+	ext := strings.ToLower(filepath.Ext(path))
+	if ext == ".png" {
+		mime = "image/png"
+	} else if ext == ".webp" {
+		mime = "image/webp"
+	} else if ext == ".gif" {
+		mime = "image/gif"
+	}
+
+	return fmt.Sprintf("data:%s;base64,%s", mime, base64.StdEncoding.EncodeToString(data)), nil
+}
+
+func (a *App) GetFileContent(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }

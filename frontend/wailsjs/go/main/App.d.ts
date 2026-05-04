@@ -10,6 +10,10 @@ export function GetBalancedLayers(arg1:string):Promise<number>;
 
 export function GetConfig():Promise<main.Config>;
 
+export function GetFileContent(arg1:string):Promise<string>;
+
+export function GetImageBase64(arg1:string):Promise<string>;
+
 export function GetSpecs():Promise<main.SystemSpecs>;
 
 export function IsServerRunning():Promise<boolean>;

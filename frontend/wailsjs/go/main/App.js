@@ -18,6 +18,14 @@ export function GetConfig() {
   return window['go']['main']['App']['GetConfig']();
 }
 
+export function GetFileContent(arg1) {
+  return window['go']['main']['App']['GetFileContent'](arg1);
+}
+
+export function GetImageBase64(arg1) {
+  return window['go']['main']['App']['GetImageBase64'](arg1);
+}
+
 export function GetSpecs() {
   return window['go']['main']['App']['GetSpecs']();
 }

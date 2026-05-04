@@ -1,4 +1,4 @@
-import {GetSpecs, GetConfig, SaveSettings, ListModels, ListClips, GetBalancedLayers, SendMessage, ClearHistory, CheckServerExecutable, StartServer, StopServer, IsServerRunning} from '../wailsjs/go/main/App';
+import {GetSpecs, GetConfig, SaveSettings, ListModels, ListClips, GetBalancedLayers, SendMessage, ClearHistory, CheckServerExecutable, StartServer, StopServer, IsServerRunning, GetImageBase64, GetFileContent} from '../wailsjs/go/main/App';
 import {EventsOn, BrowserOpenURL} from '../wailsjs/runtime/runtime';
 
 let currentImagePath = "";
@@ -13,31 +13,40 @@ window.showTab = function(element, tabName) {
 }
 
 // Drag & Drop
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => e.preventDefault());
+
 EventsOn('file-dropped', (filePath) => {
     handleFilePath(filePath);
 });
 
-function handleFilePath(filePath) {
+async function handleFilePath(filePath) {
     currentImagePath = filePath;
     const lowerPath = filePath.toLowerCase();
+    const fileName = filePath.split('\\').pop().split('/').pop();
 
     if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg') || lowerPath.endsWith('.png') || lowerPath.endsWith('.webp')) {
-        // We can't directly load local files into <img> in Wails without a custom asset handler or base64
-        // For simplicity, we'll use a placeholder or just the path for now.
-        // In a real app, we'd use a custom asset server or Wails.Read(filePath)
-        const img = document.getElementById('image-preview');
-        // Hack: Use a placeholder or assume the backend will handle it.
-        img.src = "https://via.placeholder.com/300x200?text=Image+Loaded";
-        img.style.display = 'block';
-        document.getElementById('code-preview').style.display = 'none';
-        document.getElementById('drop-zone').querySelector('p').textContent = `Loaded: ${filePath.split('\\').pop().split('/').pop()}`;
+        try {
+            const base64Data = await GetImageBase64(filePath);
+            const img = document.getElementById('image-preview');
+            img.src = base64Data;
+            img.style.display = 'block';
+            document.getElementById('code-preview').style.display = 'none';
+            document.getElementById('drop-zone').querySelector('p').textContent = `Loaded: ${fileName}`;
+        } catch (err) {
+            console.error(err);
+        }
     } else {
-        // Treat as code
-        const code = document.getElementById('code-preview');
-        code.textContent = `File path: ${filePath}\n(Wails security prevents direct local file reading in browser, but backend has the path)`;
-        code.style.display = 'block';
-        document.getElementById('image-preview').style.display = 'none';
-        document.getElementById('drop-zone').querySelector('p').textContent = `Loaded: ${filePath.split('\\').pop().split('/').pop()}`;
+        try {
+            const content = await GetFileContent(filePath);
+            const code = document.getElementById('code-preview');
+            code.textContent = content.substring(0, 5000) + (content.length > 5000 ? "\n..." : "");
+            code.style.display = 'block';
+            document.getElementById('image-preview').style.display = 'none';
+            document.getElementById('drop-zone').querySelector('p').textContent = `Loaded: ${fileName}`;
+        } catch (err) {
+            console.error(err);
+        }
     }
 }
 
@@ -101,7 +110,7 @@ sendBtn.onclick = async () => {
 
     const hasServer = await CheckServerExecutable();
     if (!hasServer) {
-        appendMessage('ai', '### ⚠️ Missing llama-server.exe\n\nPlease place `llama-server.exe` from the [llama.cpp releases](https://github.com/ggerganov/llama.cpp/releases) into the `llama/` folder to start chatting.');
+        appendMessage('ai', '### ⚠️ Missing Server or Backends\n\nPlease copy **ALL files** from the [llama.cpp zip](https://github.com/ggerganov/llama.cpp/releases) into the `llama/` folder.\n\nRequired:\n- `llama-server.exe`\n- `llama.dll`\n- `ggml-cpu.dll` (and other `ggml-*.dll` files)');
         return;
     }
 
@@ -123,10 +132,13 @@ document.getElementById('clear-btn').onclick = async () => {
 // Settings logic
 async function initSettings() {
     const specs = await GetSpecs();
-    document.getElementById('spec-cpu').textContent = specs.cpu;
-    document.getElementById('spec-ram').textContent = specs.ram;
-    document.getElementById('spec-gpu').textContent = specs.gpu;
-    document.getElementById('spec-vram').textContent = specs.vram;
+    if (specs.cpu || specs.ram > 0) {
+        document.getElementById('system-specs').style.display = 'block';
+        document.getElementById('spec-cpu').textContent = specs.cpu || 'Unknown';
+        document.getElementById('spec-ram').textContent = specs.ram;
+        document.getElementById('spec-gpu').textContent = specs.gpu || 'None Detected';
+        document.getElementById('spec-vram').textContent = specs.vram;
+    }
 
     const config = await GetConfig();
     document.getElementById('personality-input').value = config.personality;
@@ -134,6 +146,18 @@ async function initSettings() {
     document.getElementById('remember-first').checked = config.remember_first;
     document.getElementById('debug-log').checked = config.debug_log;
     document.getElementById('gpu-layers').value = config.gpu_layers;
+    document.getElementById('server-url').value = config.server_url;
+
+    const updateLocalOnly = () => {
+        const url = document.getElementById('server-url').value;
+        const isLocal = url.includes('localhost') || url.includes('127.0.0.1');
+        document.querySelectorAll('.local-only').forEach(el => {
+            el.style.opacity = isLocal ? '1' : '0.5';
+            el.style.pointerEvents = isLocal ? 'auto' : 'none';
+        });
+    };
+    document.getElementById('server-url').oninput = updateLocalOnly;
+    updateLocalOnly();
 
     const models = await ListModels();
     const modelSelect = document.getElementById('model-select');
@@ -174,7 +198,7 @@ async function updateServerStatus() {
 document.getElementById('start-server-btn').onclick = async () => {
     const hasServer = await CheckServerExecutable();
     if (!hasServer) {
-        alert('llama-server.exe not found in llama/ folder');
+        alert('llama-server.exe or ggml-*.dll missing in llama/ folder. Copy all files from the llama.cpp zip.');
         return;
     }
     try {
@@ -199,6 +223,7 @@ document.getElementById('save-settings-btn').onclick = async () => {
         remember_first: document.getElementById('remember-first').checked,
         debug_log: document.getElementById('debug-log').checked,
         gpu_layers: parseInt(document.getElementById('gpu-layers').value),
+        server_url: document.getElementById('server-url').value,
     };
     const result = await SaveSettings(config);
     alert(result);

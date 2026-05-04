@@ -121,7 +121,7 @@ func (a *App) StartServer() error {
 			return fmt.Errorf("llama-server exited prematurely. Check llama-server.log for details.")
 		}
 
-		resp, err := http.Get("http://127.0.0.1:8080/health")
+		resp, err := http.Get(a.config.ServerURL + "/health")
 		if err == nil {
 			status := resp.StatusCode
 			resp.Body.Close()
@@ -158,8 +158,12 @@ func (a *App) IsServerRunning() bool {
 	return a.server != nil
 }
 
+func (a *App) isLocalServer() bool {
+	return strings.Contains(a.config.ServerURL, "localhost") || strings.Contains(a.config.ServerURL, "127.0.0.1")
+}
+
 func (a *App) SendMessage(text string, imagePath string) error {
-	if a.server == nil {
+	if a.server == nil && a.isLocalServer() {
 		err := a.StartServer()
 		if err != nil {
 			return err
@@ -204,7 +208,7 @@ func (a *App) SendMessage(text string, imagePath string) error {
 	}
 
 	jsonBody, _ := json.Marshal(reqBody)
-	resp, err := http.Post("http://127.0.0.1:8080/v1/chat/completions", "application/json", bytes.NewBuffer(jsonBody))
+	resp, err := http.Post(a.config.ServerURL+"/v1/chat/completions", "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}

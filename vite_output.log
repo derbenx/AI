@@ -8,3 +8,11 @@
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
 2:11:35 AM [vite] page reload src/main.js
+3:18:13 AM [vite] page reload src/main.js
+3:31:06 AM [vite] page reload src/main.js
+3:31:56 AM [vite] page reload wailsjs/go/main/App.js
+3:31:56 AM [vite] page reload wailsjs/runtime/runtime.js
+3:59:37 AM [vite] page reload index.html
+3:59:55 AM [vite] page reload src/main.js
+4:04:55 AM [vite] page reload index.html
+4:05:15 AM [vite] page reload src/main.js
