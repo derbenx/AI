@@ -104,6 +104,20 @@ EventsOn('done', () => {
     currentAiContent = "";
 });
 
+EventsOn('server-log', (log) => {
+    const logArea = document.getElementById('server-log');
+    logArea.value += log + "\n";
+    logArea.scrollTop = logArea.scrollHeight;
+});
+
+EventsOn('server-status', (status) => {
+    updateServerStatus(status);
+});
+
+document.getElementById('clear-log-btn').onclick = () => {
+    document.getElementById('server-log').value = "";
+};
+
 sendBtn.onclick = async () => {
     const text = chatInput.value.trim();
     if (!text && !currentImagePath) return;
@@ -192,11 +206,23 @@ async function initSettings() {
     await updateServerStatus();
 }
 
-async function updateServerStatus() {
+async function updateServerStatus(statusText) {
     const running = await IsServerRunning();
-    const status = document.getElementById('server-status');
-    status.textContent = running ? 'Running' : 'Stopped';
-    status.style.color = running ? '#44ff44' : '#ff4444';
+    const text = statusText || (running ? 'Running' : 'Stopped');
+
+    const isBooting = text === 'Booting...';
+
+    // Disable/Enable buttons
+    document.getElementById('start-server-btn').disabled = running || isBooting;
+    document.getElementById('stop-server-btn').disabled = !running && !isBooting;
+
+    const statusEl = document.getElementById('server-status-tab');
+    if (statusEl) {
+        statusEl.textContent = text;
+        if (text === 'Running') statusEl.style.color = '#44ff44';
+        else if (isBooting) statusEl.style.color = '#ffcc00';
+        else statusEl.style.color = '#ff4444';
+    }
 }
 
 document.getElementById('start-server-btn').onclick = async () => {

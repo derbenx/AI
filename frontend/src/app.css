@@ -138,10 +138,16 @@ button:hover {
     font-size: 12px;
 }
 
-#settings-tab {
+#settings-tab, #server-tab {
     flex-direction: column;
     padding: 20px;
     overflow-y: auto;
+}
+
+#server-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
 }
 
 .setting-group {

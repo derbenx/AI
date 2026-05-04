@@ -10,6 +10,7 @@
 <div id="app">
     <div id="tabs">
         <button class="tab-btn active" onclick="showTab(this, 'main')">Main</button>
+        <button class="tab-btn local-only" onclick="showTab(this, 'server')">Server</button>
         <button class="tab-btn" onclick="showTab(this, 'settings')">Settings</button>
     </div>
 
@@ -33,6 +34,23 @@
             <div id="preview-content">
                 <img id="image-preview" style="display: none; max-width: 100%;" />
                 <pre id="code-preview" style="display: none;"></pre>
+            </div>
+        </div>
+    </div>
+
+    <div id="server-tab" class="tab-content">
+        <div id="server-container">
+            <div class="setting-group">
+                <label>Server Control: <span id="server-status-tab" style="color: #ff4444;">Stopped</span></label>
+                <div style="display: flex; gap: 10px;">
+                    <button id="start-server-btn">Start Server</button>
+                    <button id="stop-server-btn" style="background-color: #d32f2f;">Stop Server</button>
+                </div>
+            </div>
+            <div class="setting-group" style="flex: 1; display: flex; flex-direction: column;">
+                <label>Server Output Log:</label>
+                <textarea id="server-log" readonly style="flex: 1; font-family: monospace; font-size: 11px; margin-top: 5px;"></textarea>
+                <button id="clear-log-btn" style="margin-top: 5px; align-self: flex-end; background-color: #444;">Clear Log</button>
             </div>
         </div>
     </div>
@@ -88,13 +106,6 @@
             <small style="color: #888; font-size: 0.8em; margin-top: 4px;">
                 Note: Layers not offloaded to GPU will automatically run on your CPU (Hybrid Mode).
             </small>
-        </div>
-        <div class="setting-group local-only">
-            <label>Server Control: <span id="server-status" style="color: #ff4444;">Stopped</span></label>
-            <div style="display: flex; gap: 10px;">
-                <button id="start-server-btn">Start Server</button>
-                <button id="stop-server-btn" style="background-color: #d32f2f;">Stop Server</button>
-            </div>
         </div>
         <div id="system-specs" style="display: none;">
             <h3>System Specs</h3>

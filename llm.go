@@ -101,24 +101,37 @@ func (a *App) StartServer() error {
 	// Hide window on Windows
 	cmd.SysProcAttr = getSysProcAttr()
 
-	// Redirect output to debug log or discard
-	if a.config.DebugLog {
-		f, _ := os.OpenFile("llama-server.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-		cmd.Stdout = f
-		cmd.Stderr = f
-	}
+	// Capture output for streaming
+	stdout, _ := cmd.StdoutPipe()
+	stderr, _ := cmd.StderrPipe()
 
 	err := cmd.Start()
 	if err != nil {
 		return err
 	}
 
-	// Wait for server to be ready
+	// Stream logs to frontend
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			wailsruntime.EventsEmit(a.ctx, "server-log", scanner.Text())
+		}
+	}()
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			wailsruntime.EventsEmit(a.ctx, "server-log", scanner.Text())
+		}
+	}()
+
+	// Wait for server to be ready (longer timeout for old hardware)
 	started := false
-	for i := 0; i < 30; i++ {
+	wailsruntime.EventsEmit(a.ctx, "server-status", "Booting...")
+
+	for i := 0; i < 300; i++ {
 		// Check if process is still running
 		if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-			return fmt.Errorf("llama-server exited prematurely. Check llama-server.log for details.")
+			return fmt.Errorf("llama-server exited prematurely. Check logs in the Server tab.")
 		}
 
 		resp, err := http.Get(a.config.ServerURL + "/health")
@@ -135,9 +148,10 @@ func (a *App) StartServer() error {
 
 	if !started {
 		cmd.Process.Kill()
-		return fmt.Errorf("llama-server failed to start within 30 seconds")
+		return fmt.Errorf("llama-server failed to start within 5 minutes")
 	}
 
+	wailsruntime.EventsEmit(a.ctx, "server-status", "Running")
 	a.server = &LLMServer{cmd: cmd}
 	return nil
 }
