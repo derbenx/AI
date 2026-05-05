@@ -1,0 +1,2 @@
+Your AI model goes here, some example are:
+gemma-4-E2B-it-Q4_K_M.gguf
