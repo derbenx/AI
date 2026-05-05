@@ -1,0 +1,13 @@
+{
+  "tool_name": "ls",
+  "description": "List files and directories",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "file_path": {
+        "type": "string",
+        "description": "Relative path to folder ('/images')."
+      },
+    "required": ["file_path"]
+  }
+}
