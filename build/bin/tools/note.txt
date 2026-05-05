@@ -1,0 +1,18 @@
+{
+  "tool_name": "note",
+  "description": "Writes or retrieves persistent technical notes to assist with AI long-term memory.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "integer",
+        "description": "The line number for the note. 0 is used to read the entire list."
+      },
+      "content": {
+        "type": "string",
+        "description": "The text to be saved, required only for 'write' action."
+      }
+    },
+    "required": ["id"]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "tool_name": "fread",
+  "description": "Reads file content. If the file is large, the system will reject a full read; use 'head' or 'tail' to retrieve specific segments.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "file_path": {
+        "type": "string",
+        "description": "Relative path to the file (e.g., 'main.go' or 'logs/build.log')."
+      },
+      "operation": {
+        "type": "string",
+        "enum": ["tail", "head"],
+        "description": "Optional: Read from the top (head) or bottom (tail) of the file."
+      },
+      "count": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 1000,
+        "description": "Number of lines to read when using head or tail."
+      }
+    },
+    "required": ["file_path"]
+  }
+}

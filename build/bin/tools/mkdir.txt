@@ -1,12 +1,12 @@
 {
-  "tool_name": "ls",
-  "description": "List files and directories",
+  "tool_name": "mkdir",
+  "description": "Make Directory",
   "parameters": {
     "type": "object",
     "properties": {
       "file_path": {
         "type": "string",
-        "description": "Relative path to folder ('/images')."
+        "description": "Relative path to dir ('/images')."
       },
     "required": ["file_path"]
   }

@@ -1,12 +1,12 @@
 {
-  "tool_name": "ls",
-  "description": "List files and directories",
+  "tool_name": "ss",
+  "description": "Screenshot",
   "parameters": {
     "type": "object",
     "properties": {
       "file_path": {
         "type": "string",
-        "description": "Relative path to folder ('/images')."
+        "description": "Relative path to save the file ('image.jpg')."
       },
     "required": ["file_path"]
   }

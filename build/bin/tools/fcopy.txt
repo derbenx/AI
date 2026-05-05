@@ -1,0 +1,18 @@
+{
+  "tool_name": "fcopy",
+  "description": "Copy file to new name",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "org_path": {
+        "type": "string",
+        "description": "Relative path to the original file (e.g., 'main.go' or 'logs/build.log')."
+      },
+      "dst_path": {
+        "type": "string",
+        "description": "Relative path to the destination file (e.g., 'main.go' or 'logs/build.log')."
+      }
+    },
+    "required": ["org_path","dst_path"]
+  }
+}

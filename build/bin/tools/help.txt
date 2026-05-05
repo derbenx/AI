@@ -1,0 +1,14 @@
+{
+  "tool_name": "help",
+  "description": "List tools or provides help for tools",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "tool": {
+        "type": "string",
+        "description": "if blank lists tools, otherwise lists tool help."
+      }
+    },
+    "required": []
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "tool_name": "rm",
+  "description": "remove file, automatically saves timestamped backup to trash folder",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "file_path": {
+        "type": "string",
+        "description": "Relative path to file ('/images/img.jpg')."
+      },
+    "required": ["file_path"]
+  }
+}

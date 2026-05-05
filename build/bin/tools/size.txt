@@ -1,6 +1,6 @@
 {
-  "tool_name": "ls",
-  "description": "List files and directories",
+  "tool_name": "size",
+  "description": "Display file size",
   "parameters": {
     "type": "object",
     "properties": {

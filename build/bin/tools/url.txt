@@ -1,0 +1,14 @@
+{
+  "tool_name": "url",
+  "description": "saves the full content of a specified URL to the filename returned.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "description": "The URL to read"
+      }
+    },
+    "required": ["url"]
+  }
+}

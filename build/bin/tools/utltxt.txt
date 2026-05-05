@@ -1,0 +1,14 @@
+{
+  "tool_name": "urltxt",
+  "description": "Saves the content of a specified URL, stripping HTML tags to the filename returned.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "url": {
+        "type": "string",
+        "description": "The URL to read without html tags"
+      }
+    },
+    "required": ["url"]
+  }
+}

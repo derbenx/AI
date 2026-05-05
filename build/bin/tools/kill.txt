@@ -1,0 +1,5 @@
+{
+  "tool_name": "kill",
+  "description": "Stops runnning program with user configured command.",
+  "required": []
+}

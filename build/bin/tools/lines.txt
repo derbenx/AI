@@ -1,6 +1,6 @@
 {
-  "tool_name": "ls",
-  "description": "List files and directories",
+  "tool_name": "lines",
+  "description": "Display numer of lines in file",
   "parameters": {
     "type": "object",
     "properties": {

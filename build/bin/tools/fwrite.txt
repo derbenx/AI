@@ -1,0 +1,24 @@
+{
+  "tool_name": "fwrite",
+  "description": "Modifies or overwrites the content of a specified file",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "file_path": {
+        "type": "string",
+        "description": "The relative path to the file to be modified (e.g., 'src/main.py')."
+      },
+      "operation": {
+        "type": "string",
+        "enum": ["write", "append"],
+        "description": "The action to perform on the file. write replaces, append adds to the end."
+      },
+      "content": {
+        "type": "string",
+        "description": "The new content that should be written to the file."
+      }
+
+    },
+    "required": ["file_path", "operation", "content"]
+  }
+}

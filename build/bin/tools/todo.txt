@@ -1,0 +1,19 @@
+{
+  "tool_name": "todo",
+  "description": "Manages the users project checklist to track progress and prevent task drift.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "integer",
+        "description": "The specific line number to use. Use 0 to read the entire list."
+      },
+      "action": {
+        "type": "string",
+        "enum": ["started", "done"],
+        "description": "started and done append that word to the line like a checklist."
+      }
+    },
+    "required": ["id"]
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "tool_name": "run",
+  "description": "runs compiled program with user configured command. Output saved to run.log",
+  "required": []
+}
