@@ -253,3 +253,7 @@ func (a *App) logChat(role, content string) {
 func (a *App) GetDefaultCodePrompt() string {
 	return defaultConfig.CodePrompt
 }
+
+func (a *App) TestTool(command string) string {
+	return a.ExecuteTool(command)
+}

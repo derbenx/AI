@@ -89,3 +89,7 @@ export function GetDefaultCodePrompt() {
 export function StartNewSession() {
   return window['go']['main']['App']['StartNewSession']();
 }
+
+export function TestTool(arg1) {
+  return window['go']['main']['App']['TestTool'](arg1);
+}

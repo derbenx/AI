@@ -253,16 +253,16 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 		systemPrompt = strings.ReplaceAll(systemPrompt, "[qa]", fmt.Sprintf("%d", a.config.MemoryLimit))
 		systemPrompt = strings.ReplaceAll(systemPrompt, "[tools]", a.toolHelp(""))
 		// Only emit once at the very start of a session
-		if !strings.Contains(text, "Tool output for") {
+		if !strings.HasPrefix(text, "output: ") {
 			wailsruntime.EventsEmit(a.ctx, "system-prompt-display", systemPrompt)
 		}
 	}
 
-	if !strings.Contains(text, "Tool output for") {
+	if !strings.HasPrefix(text, "output: ") {
 		a.logChat("system", systemPrompt)
 	}
 	a.logChat("user", text)
-	if isCodeMode && strings.Contains(text, "Tool output for") {
+	if isCodeMode && strings.HasPrefix(text, "output: ") {
 		wailsruntime.EventsEmit(a.ctx, "internal-user-message", text)
 	}
 
@@ -343,16 +343,14 @@ func (a *App) handleToolCalls(response string) {
 				return
 			}
 
-			wailsruntime.EventsEmit(a.ctx, "tool-executing", cmd)
 			output := a.ExecuteTool(cmd)
 			a.logChat("tool-output", fmt.Sprintf("[%s] %s", cmd, output))
-			wailsruntime.EventsEmit(a.ctx, "tool-output", output)
 
 			// Automatically send output back to AI
 			go func() {
-				time.Sleep(500 * time.Millisecond)
+				time.Sleep(200 * time.Millisecond)
 				if a.isCodeActive {
-					a.processMessage(fmt.Sprintf("Tool output for '%s':\n%s", cmd, output), "", true)
+					a.processMessage(fmt.Sprintf("output: %s: %s", cmd, output), "", true)
 				}
 			}()
 			return // Handle one command at a time to keep it sequential

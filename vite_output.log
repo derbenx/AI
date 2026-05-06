@@ -3,25 +3,8 @@
 > vite
 
 
-  VITE v3.2.11  ready in 671 ms
+  VITE v3.2.11  ready in 261 ms
 
   ➜  Local:   http://localhost:5173/
   ➜  Network: use --host to expose
-2:11:35 AM [vite] page reload src/main.js
-3:18:13 AM [vite] page reload src/main.js
-3:31:06 AM [vite] page reload src/main.js
-3:31:56 AM [vite] page reload wailsjs/go/main/App.js
-3:31:56 AM [vite] page reload wailsjs/runtime/runtime.js
-3:59:37 AM [vite] page reload index.html
-3:59:55 AM [vite] page reload src/main.js
-4:04:55 AM [vite] page reload index.html
-4:05:15 AM [vite] page reload src/main.js
-5:55:16 AM [vite] page reload index.html
-5:55:23 AM [vite] page reload src/main.js
-6:38:57 AM [vite] page reload index.html
-6:39:01 AM [vite] hmr update /src/app.css?direct
-6:40:04 AM [vite] page reload src/main.js
-6:40:52 AM [vite] page reload src/main.js
-4:09:04 PM [vite] page reload index.html
-4:09:08 PM [vite] hmr update /src/app.css?direct
-4:10:00 PM [vite] page reload src/main.js
+6:18:31 PM [vite] page reload src/main.js

@@ -653,10 +653,10 @@ func (a *App) toolBuild() string {
 
 	err = cmd.Run()
 	if err != nil {
-		return fmt.Sprintf("Build failed: %v. Look at 'build.log' for errors.", err)
+		return fmt.Sprintf("Build failed: %v. To see errors, use: fread: build.log", err)
 	}
 
-	return "Done, look at 'build.log' for errors."
+	return "Done. To see errors, use: fread: build.log"
 }
 
 func (a *App) toolRun() string {
@@ -703,7 +703,7 @@ func (a *App) toolRun() string {
 	// Wait a few seconds to collect initial data
 	time.Sleep(3 * time.Second)
 
-	return "Done, look at 'run.log' for errors."
+	return "Done. To see errors, use: fread: run.log"
 }
 
 func (a *App) toolKill() string {
@@ -814,7 +814,7 @@ func (a *App) toolHelp(toolname string) string {
 			allowedNames = append(allowedNames, t.Name)
 		}
 	}
-	return strings.Join(allowedNames, ", ")
+	return strings.Join(allowedNames, ", ") + " (use 'help: toolname' for details)"
 }
 
 func (a *App) isToolAllowed(tool string) bool {
