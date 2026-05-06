@@ -26,8 +26,7 @@ func isAdmin() bool {
 	}
 	defer windows.FreeSid(sid)
 
-	var token windows.Token
-	err = windows.OpenCurrentProcessToken(windows.TOKEN_QUERY, &token)
+	token, err := windows.OpenCurrentProcessToken()
 	if err != nil {
 		return false
 	}
