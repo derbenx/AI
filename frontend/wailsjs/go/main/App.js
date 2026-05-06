@@ -85,3 +85,7 @@ export function UpdateAINotes(arg1) {
 export function GetDefaultCodePrompt() {
   return window['go']['main']['App']['GetDefaultCodePrompt']();
 }
+
+export function StartNewSession() {
+  return window['go']['main']['App']['StartNewSession']();
+}

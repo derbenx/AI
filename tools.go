@@ -145,7 +145,7 @@ func (a *App) securePath(path string) (string, error) {
 func (a *App) toolFRead(args string) string {
 	parts := a.splitArgs(args)
 	if len(parts) == 0 {
-		return "Error: fread requires a file path."
+		return "Error: fread requires a file path. See 'help: fread'"
 	}
 	path := parts[0]
 	fullPath, err := a.securePath(path)
@@ -279,7 +279,7 @@ func (a *App) splitArgs(args string) []string {
 func (a *App) toolFWrite(args string) string {
 	parts := a.splitArgs(args)
 	if len(parts) < 3 {
-		return "Error: fwrite requires <path> <operation: write|append> <content>. Use quotes if path has spaces."
+		return "Error: fwrite requires <path> <operation: write|append> <content>. See 'help: fwrite'"
 	}
 	path := parts[0]
 	operation := strings.ToLower(parts[1])
@@ -406,7 +406,7 @@ func (a *App) toolNote(args string) string {
 
 	id, err := strconv.Atoi(parts[0])
 	if err != nil || id < 1 || id > len(lines)+1 {
-		return fmt.Sprintf("Error: Invalid note ID. List has %d lines.", len(lines))
+		return fmt.Sprintf("Error: Invalid note ID. Number expected for first parameter. See 'help: note'")
 	}
 
 	if len(parts) > 1 {
@@ -505,7 +505,7 @@ func (a *App) toolTodo(args string) string {
 
 	id, err := strconv.Atoi(parts[0])
 	if err != nil || id < 1 || id > len(lines) {
-		return fmt.Sprintf("Error: Invalid line ID. List has %d lines.", len(lines))
+		return fmt.Sprintf("Error: Invalid line ID. Number expected for first parameter. See 'help: todo'")
 	}
 
 	if len(parts) > 1 {
@@ -798,12 +798,11 @@ func (a *App) toolHelp(toolname string) string {
 	}
 
 	tools, _ := a.ListAvailableTools()
-	var sb strings.Builder
-	sb.WriteString("Available tools:\n")
+	var allowedNames []string
 
-	for name, desc := range builtIns {
+	for name := range builtIns {
 		if a.isToolAllowed(name) {
-			sb.WriteString(fmt.Sprintf("- %s: %s\n", name, desc))
+			allowedNames = append(allowedNames, name)
 		}
 	}
 
@@ -812,10 +811,10 @@ func (a *App) toolHelp(toolname string) string {
 			continue // Already listed
 		}
 		if a.isToolAllowed(t.Name) {
-			sb.WriteString(fmt.Sprintf("- %s: %s\n", t.Name, strings.TrimSpace(t.Description)))
+			allowedNames = append(allowedNames, t.Name)
 		}
 	}
-	return sb.String()
+	return strings.Join(allowedNames, ", ")
 }
 
 func (a *App) isToolAllowed(tool string) bool {

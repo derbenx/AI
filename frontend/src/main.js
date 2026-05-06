@@ -349,6 +349,7 @@ document.getElementById('code-start-btn').onclick = async () => {
         return;
     }
 
+    await StartNewSession();
     await UpdateTodoList(todo);
     await ClearHistory();
     chatWindow.innerHTML = "";

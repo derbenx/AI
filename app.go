@@ -92,7 +92,7 @@ func (a *App) startup(ctx context.Context) {
 	if logPrefix == "." || logPrefix == "" {
 		logPrefix = "AICoder"
 	}
-	a.sessionLog = filepath.Join(baseDir, "logs", fmt.Sprintf("%s-%s.log", logPrefix, time.Now().Format("02Jan2006-150405")))
+	a.StartNewSession()
 
 	// Handle file drops
 	wailsruntime.OnFileDrop(a.ctx, func(x, y int, paths []string) {
@@ -225,6 +225,19 @@ func (a *App) UpdateAINotes(notes string) {
 
 func (a *App) SetCodeActive(active bool) {
 	a.isCodeActive = active
+}
+
+func (a *App) StartNewSession() {
+	baseDir := a.getExecDir()
+	logPrefix := a.config.AppName
+	if logPrefix == "" {
+		logPrefix = filepath.Base(a.config.ProjectFolder)
+	}
+	if logPrefix == "." || logPrefix == "" {
+		logPrefix = "AICoder"
+	}
+	a.sessionLog = filepath.Join(baseDir, "logs", fmt.Sprintf("%s-%s.log", logPrefix, time.Now().Format("02Jan2006-150405")))
+	a.logChat("system", "--- New Session Started ---")
 }
 
 func (a *App) logChat(role, content string) {
