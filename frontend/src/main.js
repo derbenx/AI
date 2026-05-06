@@ -1,4 +1,4 @@
-import {GetSpecs, GetConfig, SaveSettings, ListModels, ListClips, GetBalancedLayers, SendMessage, ClearHistory, CheckServerExecutable, StartServer, StopServer, IsServerRunning, GetImageBase64, GetFileContent} from '../wailsjs/go/main/App';
+import {GetSpecs, GetConfig, SaveSettings, ListModels, ListClips, GetBalancedLayers, SendMessage, ClearHistory, CheckServerExecutable, StartServer, StopServer, IsServerRunning, GetImageBase64, GetFileContent, ListAvailableTools, SendCodeMessage} from '../wailsjs/go/main/App';
 import {EventsOn, BrowserOpenURL} from '../wailsjs/runtime/runtime';
 
 let currentImagePath = "";
@@ -113,6 +113,25 @@ EventsOn('done', () => {
     currentAiContent = "";
 });
 
+EventsOn('tool-executing', (cmd) => {
+    appendMessage('ai', `*Executing tool:* \`${cmd}\``);
+});
+
+EventsOn('tool-output', (output) => {
+    appendMessage('ai', `*Tool Output:* \n\`\`\`\n${output}\n\`\`\``);
+});
+
+EventsOn('code-finished', (msg) => {
+    appendMessage('ai', `**${msg}**`);
+    stopCodeMode();
+});
+
+EventsOn('ai-note', (note) => {
+    const aiNotesArea = document.getElementById('ai-notes');
+    aiNotesArea.value += note + "\n---\n";
+    aiNotesArea.scrollTop = aiNotesArea.scrollHeight;
+});
+
 EventsOn('server-log', (log) => {
     const logArea = document.getElementById('server-log');
     logArea.value += log + "\n";
@@ -213,6 +232,135 @@ async function initSettings() {
     modelSelect.onchange();
 
     await updateServerStatus();
+    await initCodeSetup();
+}
+
+async function initCodeSetup() {
+    const config = await GetConfig();
+    document.getElementById('project-folder').value = config.project_folder || "";
+    document.getElementById('app-name').value = config.app_name || "";
+    document.getElementById('build-command').value = config.build_command || "build {app}";
+    document.getElementById('run-command').value = config.run_command || "runas /noprofile /user:{user} “cmd.exe -m {app}”";
+    document.getElementById('kill-command').value = config.kill_command || "kill {app}";
+    document.getElementById('username').value = config.username || "";
+    document.getElementById('password').value = config.password || "";
+    document.getElementById('code-prompt').value = config.code_prompt || "";
+
+    const tools = await ListAvailableTools();
+    const toolsContainer = document.getElementById('tools-checkboxes');
+    toolsContainer.innerHTML = "";
+    tools.forEach(t => {
+        const div = document.createElement('div');
+        div.style.display = 'flex';
+        div.style.alignItems = 'center';
+        div.style.gap = '5px';
+
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = t.name;
+        cb.id = `tool-${t.name}`;
+        if (config.allowed_tools && config.allowed_tools.includes(t.name)) {
+            cb.checked = true;
+        }
+
+        const lbl = document.createElement('label');
+        lbl.htmlFor = `tool-${t.name}`;
+        lbl.textContent = t.name;
+        lbl.title = t.description;
+
+        div.appendChild(cb);
+        div.appendChild(lbl);
+        toolsContainer.appendChild(div);
+    });
+
+    const usernameInput = document.getElementById('username');
+    const adminWarning = document.getElementById('admin-warning');
+    const updateAdminWarning = () => {
+        const user = usernameInput.value.toLowerCase();
+        if (user === 'admin' || user === 'administrator') {
+            adminWarning.style.display = 'block';
+        } else {
+            adminWarning.style.display = 'none';
+        }
+    };
+    usernameInput.oninput = updateAdminWarning;
+    updateAdminWarning();
+}
+
+document.getElementById('save-code-setup-btn').onclick = async () => {
+    const allowed_tools = [];
+    document.querySelectorAll('#tools-checkboxes input[type="checkbox"]').forEach(cb => {
+        if (cb.checked) allowed_tools.push(cb.value);
+    });
+
+    const currentConfig = await GetConfig();
+    const config = {
+        ...currentConfig,
+        project_folder: document.getElementById('project-folder').value,
+        app_name: document.getElementById('app-name').value,
+        build_command: document.getElementById('build-command').value,
+        run_command: document.getElementById('run-command').value,
+        kill_command: document.getElementById('kill-command').value,
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value,
+        code_prompt: document.getElementById('code-prompt').value,
+        allowed_tools: allowed_tools
+    };
+    const result = await SaveSettings(config);
+    showNotification(result);
+};
+
+let isCodeRunning = false;
+
+document.getElementById('code-start-btn').onclick = async () => {
+    const todo = document.getElementById('todo-list').value;
+    if (!todo) {
+        showNotification("Please provide a todo list first.");
+        return;
+    }
+
+    await ClearHistory();
+    chatWindow.innerHTML = "";
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
+    document.getElementById('clear-btn').disabled = true;
+
+    isCodeRunning = true;
+    appendMessage('user', `Starting Code Mode with tasks:\n${todo}`);
+
+    try {
+        await SendCodeMessage(todo);
+    } catch (err) {
+        appendMessage('ai', `Error: ${err}`);
+        stopCodeMode();
+    }
+};
+
+document.getElementById('code-stop-btn').onclick = () => {
+    stopCodeMode();
+};
+
+document.getElementById('code-resume-btn').onclick = async () => {
+    const todo = document.getElementById('todo-list').value;
+    chatInput.disabled = true;
+    sendBtn.disabled = true;
+    document.getElementById('clear-btn').disabled = true;
+    isCodeRunning = true;
+
+    try {
+        await SendCodeMessage("Resuming task: " + todo);
+    } catch (err) {
+        appendMessage('ai', `Error: ${err}`);
+        stopCodeMode();
+    }
+};
+
+function stopCodeMode() {
+    isCodeRunning = false;
+    chatInput.disabled = false;
+    sendBtn.disabled = false;
+    document.getElementById('clear-btn').disabled = false;
+    showNotification("Code mode stopped/finished.");
 }
 
 async function updateServerStatus(statusText) {

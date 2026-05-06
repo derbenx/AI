@@ -210,6 +210,14 @@ func (a *App) getURL(path string) string {
 }
 
 func (a *App) SendMessage(text string, imagePath string) error {
+	return a.processMessage(text, imagePath, false)
+}
+
+func (a *App) SendCodeMessage(text string) error {
+	return a.processMessage(text, "", true)
+}
+
+func (a *App) processMessage(text string, imagePath string, isCodeMode bool) error {
 	if a.server == nil && a.isLocalServer() {
 		return fmt.Errorf("Server not running. Please start a llama_server from the Server tab.")
 	}
@@ -235,11 +243,19 @@ func (a *App) SendMessage(text string, imagePath string) error {
 	}
 
 	// Build context with memory
-	messages := []Message{
-		{Role: "system", Content: a.config.Personality},
+	systemPrompt := a.config.Personality
+	if isCodeMode {
+		// Use Code Prompt as System Prompt to ensure persistence
+		systemPrompt = a.config.CodePrompt
+		systemPrompt = strings.ReplaceAll(systemPrompt, "[qa]", fmt.Sprintf("%d", a.config.MemoryLimit))
+		systemPrompt = strings.ReplaceAll(systemPrompt, "[tools]", a.toolHelp())
 	}
 
-	// Add history (to be implemented in memory.go)
+	messages := []Message{
+		{Role: "system", Content: systemPrompt},
+	}
+
+	// Add history
 	history := a.getHistoryForModel()
 	messages = append(messages, history...)
 
@@ -285,5 +301,38 @@ func (a *App) SendMessage(text string, imagePath string) error {
 	a.addToHistory(text, fullResponse)
 	wailsruntime.EventsEmit(a.ctx, "done", fullResponse)
 
+	// If in code mode, check for tool calls
+	if isCodeMode {
+		a.handleToolCalls(fullResponse)
+	}
+
 	return nil
+}
+
+func (a *App) handleToolCalls(response string) {
+	lines := strings.Split(response, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "done:" {
+			wailsruntime.EventsEmit(a.ctx, "code-finished", "AI has completed the task.")
+			return
+		}
+
+		// Look for command: tool args
+		if strings.HasPrefix(line, "command:") {
+			cmd := strings.TrimPrefix(line, "command:")
+			cmd = strings.TrimSpace(cmd)
+
+			wailsruntime.EventsEmit(a.ctx, "tool-executing", cmd)
+			output := a.ExecuteTool(cmd)
+			wailsruntime.EventsEmit(a.ctx, "tool-output", output)
+
+			// Automatically send output back to AI
+			go func() {
+				time.Sleep(500 * time.Millisecond)
+				a.processMessage(fmt.Sprintf("Tool output for '%s':\n%s", cmd, output), "", true)
+			}()
+			return // Handle one command at a time to keep it sequential
+		}
+	}
 }

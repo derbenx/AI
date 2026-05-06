@@ -57,3 +57,11 @@ export function StartServer() {
 export function StopServer() {
   return window['go']['main']['App']['StopServer']();
 }
+
+export function ListAvailableTools() {
+  return window['go']['main']['App']['ListAvailableTools']();
+}
+
+export function SendCodeMessage(arg1) {
+  return window['go']['main']['App']['SendCodeMessage'](arg1);
+}

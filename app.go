@@ -61,6 +61,9 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.config = LoadConfig()
 
+	// Ensure directories exist
+	os.MkdirAll(filepath.Join("build", "bin", "tools"), 0755)
+
 	// Handle file drops
 	wailsruntime.OnFileDrop(a.ctx, func(x, y int, paths []string) {
 		if len(paths) > 0 {

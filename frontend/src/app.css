@@ -138,16 +138,27 @@ button:hover {
     font-size: 12px;
 }
 
-#settings-tab, #server-tab {
+#settings-tab, #server-tab, #code-tab, #code-setup-tab {
     flex-direction: column;
     padding: 20px;
     overflow-y: auto;
 }
 
-#server-container {
+#server-container, #code-container {
     display: flex;
     flex-direction: column;
     height: 100%;
+}
+
+.code-controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+#todo-list, #ai-notes {
+    height: 150px;
+    font-family: monospace;
 }
 
 .setting-group {

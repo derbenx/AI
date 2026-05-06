@@ -8,25 +8,39 @@ import (
 )
 
 type Config struct {
-	ModelPath           string `json:"model_path"`
-	ClipPath            string `json:"clip_path"`
-	Personality         string `json:"personality"`
-	MemoryLimit         int    `json:"memory_limit"`
-	RememberFirst       bool   `json:"remember_first"`
-	DebugLog            bool   `json:"debug_log"`
-	GPULayers           int    `json:"gpu_layers"`
-	ServerURL           string `json:"server_url"`
-	ServerMode          string `json:"server_mode"` // "local" or "remote"
+	ModelPath     string   `json:"model_path"`
+	ClipPath      string   `json:"clip_path"`
+	Personality   string   `json:"personality"`
+	MemoryLimit   int      `json:"memory_limit"`
+	RememberFirst bool     `json:"remember_first"`
+	DebugLog      bool     `json:"debug_log"`
+	GPULayers     int      `json:"gpu_layers"`
+	ServerURL     string   `json:"server_url"`
+	ServerMode    string   `json:"server_mode"` // "local" or "remote"
+	ProjectFolder string   `json:"project_folder"`
+	BuildCommand  string   `json:"build_command"`
+	RunCommand    string   `json:"run_command"`
+	KillCommand   string   `json:"kill_command"`
+	AppName       string   `json:"app_name"`
+	Username      string   `json:"username"`
+	Password      string   `json:"password"`
+	CodePrompt    string   `json:"code_prompt"`
+	AllowedTools  []string `json:"allowed_tools"`
 }
 
 var defaultConfig = Config{
 	Personality:   "You are a helpful AI assistant.",
-	MemoryLimit:   5,
+	MemoryLimit:   15,
 	RememberFirst: true,
 	DebugLog:      true,
 	GPULayers:     0,
 	ServerURL:     "http://127.0.0.1:8080",
 	ServerMode:    "local",
+	BuildCommand:  "build {app}",
+	RunCommand:    "runas /noprofile /user:{user} \"cmd.exe -m {app}\"",
+	KillCommand:   "kill {app}",
+	CodePrompt:    "You are a programming assistant. Use the provided tools to complete the tasks.",
+	AllowedTools:  []string{},
 }
 
 func LoadConfig() Config {

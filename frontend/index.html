@@ -10,6 +10,8 @@
 <div id="app">
     <div id="tabs">
         <button class="tab-btn active" onclick="showTab(this, 'main')">Main</button>
+        <button class="tab-btn" onclick="showTab(this, 'code')">Code</button>
+        <button class="tab-btn" onclick="showTab(this, 'code-setup')">Code Setup</button>
         <button class="tab-btn local-only" onclick="showTab(this, 'server')">Server</button>
         <button class="tab-btn" onclick="showTab(this, 'settings')">Settings</button>
     </div>
@@ -53,6 +55,69 @@
                 <button id="clear-log-btn" style="margin-top: 5px; align-self: flex-end; background-color: #444;">Clear Log</button>
             </div>
         </div>
+    </div>
+
+    <div id="code-tab" class="tab-content">
+        <div id="code-container">
+            <div class="setting-group">
+                <label>User Todo List:</label>
+                <textarea id="todo-list" placeholder="List tasks here..."></textarea>
+            </div>
+            <div class="setting-group">
+                <label>AI Notes List:</label>
+                <textarea id="ai-notes" placeholder="AI notes will appear here..."></textarea>
+            </div>
+            <div class="code-controls">
+                <button id="code-start-btn">Start</button>
+                <button id="code-stop-btn">Stop</button>
+                <button id="code-resume-btn">Resume</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="code-setup-tab" class="tab-content">
+        <h2>Code Setup</h2>
+        <div class="setting-group">
+            <label>Project Folder:</label>
+            <input type="text" id="project-folder" placeholder="C:\path\to\project">
+        </div>
+        <div class="setting-group">
+            <label>App Name {app}:</label>
+            <input type="text" id="app-name" placeholder="myapp.exe">
+        </div>
+        <div class="setting-group">
+            <label>Build Command:</label>
+            <input type="text" id="build-command" placeholder="go build -o {app}">
+        </div>
+        <div class="setting-group">
+            <label>Run Command:</label>
+            <input type="text" id="run-command" placeholder="runas /user:{user} {app}">
+        </div>
+        <div class="setting-group">
+            <label>Kill Command:</label>
+            <input type="text" id="kill-command" placeholder="taskkill /f /im {app}">
+        </div>
+        <div class="setting-group">
+            <label>User account {user}:</label>
+            <input type="text" id="username" placeholder="Administrator">
+            <small id="admin-warning" style="color: #ff4444; display: none;">Warning: Using an admin account is risky!</small>
+        </div>
+        <div class="setting-group">
+            <label>Password:</label>
+            <input type="password" id="password" placeholder="Password (if needed)">
+        </div>
+        <div class="setting-group">
+            <label>Prompt:</label>
+            <textarea id="code-prompt" style="height: 100px;"></textarea>
+            <small style="color: #888;">[qa] = memory pairs, [tools] = available tools</small>
+        </div>
+        <div class="setting-group">
+            <label>Allowed Commands:</label>
+            <div id="tools-checkboxes" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px;">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+        <button id="save-code-setup-btn">Save Code Setup</button>
     </div>
 
     <div id="settings-tab" class="tab-content">
