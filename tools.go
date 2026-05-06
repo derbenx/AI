@@ -36,6 +36,7 @@ func (a *App) ListAvailableTools() ([]ToolInfo, error) {
 	}
 
 	builtIns := a.getBuiltInTools()
+	syntax := a.getBuiltInToolSyntax()
 
 	var tools []ToolInfo
 	seen := make(map[string]bool)
@@ -43,6 +44,11 @@ func (a *App) ListAvailableTools() ([]ToolInfo, error) {
 	// Add built-ins first
 	for name, defaultDesc := range builtIns {
 		desc := []byte(defaultDesc)
+		// For UI tooltips, use syntax if available
+		if s, ok := syntax[name]; ok {
+			desc = []byte(s)
+		}
+
 		if d, err := os.ReadFile(filepath.Join(toolsDir, name+".txt")); err == nil {
 			desc = d
 		} else if d, err := os.ReadFile(filepath.Join(toolsDir, name+".json")); err == nil {
@@ -134,7 +140,7 @@ func (a *App) ExecuteTool(command string, isAI bool) string {
 	case "mkdir":
 		output = a.toolMkdir(args)
 	case "help":
-		output = a.toolHelp(args)
+		output = a.toolHelp(args, isAI)
 	default:
 		// Try dynamic execution
 		output = a.toolDynamic(tool, args)
@@ -143,6 +149,8 @@ func (a *App) ExecuteTool(command string, isAI bool) string {
 }
 
 func (a *App) securePath(path string) (string, error) {
+	// Support Windows paths by converting backslashes
+	path = filepath.FromSlash(strings.ReplaceAll(path, "\\", "/"))
 	fullPath := filepath.Join(a.config.ProjectFolder, path)
 	rel, err := filepath.Rel(a.config.ProjectFolder, fullPath)
 	if err != nil {
@@ -257,15 +265,22 @@ func (a *App) splitArgs(args string) []string {
 	quoteChar := rune(0)
 	escaped := false
 
-	for _, r := range args {
+	for i, r := range args {
 		if escaped {
 			current.WriteRune(r)
 			escaped = false
 			continue
 		}
 		if r == '\\' {
-			escaped = true
-			continue
+			// Only escape if it's followed by a quote or another backslash
+			// This allows backslashes in Windows paths without explicit escaping
+			if i+1 < len(args) {
+				next := args[i+1]
+				if next == '"' || next == '\'' || next == '\\' {
+					escaped = true
+					continue
+				}
+			}
 		}
 		if (r == '"' || r == '\'') && !inQuotes {
 			inQuotes = true
@@ -446,7 +461,7 @@ func (a *App) toolLS(path string) string {
 	}
 
 	if !stat.IsDir() {
-		return fmt.Sprintf("%-6d %s", stat.Size(), filepath.Base(fullPath))
+		return fmt.Sprintf("Listing files:\n %-6d %s", stat.Size(), filepath.Base(fullPath))
 	}
 
 	files, err := os.ReadDir(fullPath)
@@ -455,12 +470,13 @@ func (a *App) toolLS(path string) string {
 	}
 
 	var sb strings.Builder
+	sb.WriteString("Listing files:\n")
 	for _, file := range files {
 		info, _ := file.Info()
 		if file.IsDir() {
-			sb.WriteString(fmt.Sprintf("[DIR]  %s\n", file.Name()))
+			sb.WriteString(fmt.Sprintf(" [DIR]  %s\n", file.Name()))
 		} else {
-			sb.WriteString(fmt.Sprintf("%-6d %s\n", info.Size(), file.Name()))
+			sb.WriteString(fmt.Sprintf(" %-6d %s\n", info.Size(), file.Name()))
 		}
 	}
 	return sb.String()
@@ -623,7 +639,7 @@ func (a *App) backupFile(fullPath string) (string, bool) {
 	}
 
 	rel, _ := filepath.Rel(a.config.ProjectFolder, backupPath)
-	return rel, true
+	return filepath.ToSlash(rel), true
 }
 
 func (a *App) toolURL(url string, textOnly bool) string {
@@ -685,7 +701,7 @@ func (a *App) toolURL(url string, textOnly bool) string {
 		}
 
 		finalText := strings.TrimSpace(sb.String())
-		relPath := filepath.Join("!url", fileName+".txt")
+		relPath := filepath.ToSlash(filepath.Join("!url", fileName+".txt"))
 		os.WriteFile(fullPath+".txt", []byte(finalText), 0644)
 		return fmt.Sprintf("Saved text to: %s. You can read it with fread: %s", relPath, relPath)
 	}
@@ -701,7 +717,7 @@ func (a *App) toolURL(url string, textOnly bool) string {
 		return fmt.Sprintf("Error: %v", err)
 	}
 
-	relPath := filepath.Join("!url", fileName)
+	relPath := filepath.ToSlash(filepath.Join("!url", fileName))
 	return fmt.Sprintf("Saved to: %s. You can read it with fread: %s", relPath, relPath)
 }
 
@@ -833,6 +849,27 @@ func (a *App) toolDynamic(tool, args string) string {
 
 func (a *App) getBuiltInTools() map[string]string {
 	return map[string]string{
+		"fread":  `{"tool_name": "fread", "description": "Reads file content. If the file is large (>2MB), the system will reject a full read; use 'head' or 'tail' to retrieve specific segments.", "parameters": {"type": "object", "properties": {"file_path": {"type": "string", "description": "Relative path to the file (e.g., 'main.go' or 'logs/build.log')."}, "operation": {"type": "string", "enum": ["tail", "head"], "description": "Optional: Read from the top (head) or bottom (tail) of the file."}, "count": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Number of lines to read when using head or tail."}}, "required": ["file_path"]}}`,
+		"fwrite": `{"tool_name": "fwrite", "description": "Modifies or overwrites the content of a specified file. Backs up existing files to !trash and attempts restoration if writing fails.", "parameters": {"type": "object", "properties": {"file_path": {"type": "string", "description": "The relative path to the file to be modified (e.g., 'src/main.py')."}, "operation": {"type": "string", "enum": ["write", "append"], "description": "The action to perform on the file. write replaces, append adds to the end."}, "content": {"type": "string", "description": "The new content that should be written to the file."}}, "required": ["file_path", "operation", "content"]}}`,
+		"rm":     `{"tool_name": "rm", "description": "Remove a file (with backup to !trash).", "usage": "rm <path>", "parameters": {"path": "Relative path to the file."}}`,
+		"ls":     `{"tool_name": "ls", "description": "List files and directories in a path or using a glob pattern.", "usage": "ls [path_or_pattern]", "parameters": {"path_or_pattern": "Relative path or glob pattern (e.g., *.go)."}}`,
+		"lines":  `{"tool_name": "lines", "description": "Count the number of lines in a file. Suggests fread for verification.", "usage": "lines <path>", "parameters": {"path": "Relative path to the file."}}`,
+		"fcopy":  `{"tool_name": "fcopy", "description": "Copy or rename a file.", "usage": "fcopy <src> <dst>", "parameters": {"src": "Source path.", "dst": "Destination path."}}`,
+		"mkdir":  `{"tool_name": "mkdir", "description": "Create a new directory. Suggests ls for verification.", "usage": "mkdir <path>", "parameters": {"path": "Path to create."}}`,
+		"note":   `{"tool_name": "note", "description": "Writes or retrieves persistent technical notes to assist with AI long-term memory.", "parameters": {"type": "object", "properties": {"id": {"type": "integer", "description": "The line number for the note. 0 is used to read the entire list."}, "content": {"type": "string", "description": "The text to be saved, required only for 'write' action."}}, "required": ["id"]}}`,
+		"todo":   `{"tool_name": "todo", "description": "Manages the users project checklist to track progress and prevent task drift.", "parameters": {"type": "object", "properties": {"id": {"type": "integer", "description": "The specific line number to use. Use 0 to read the entire list."}, "action": {"type": "string", "enum": ["started", "done"], "description": "started and done append that word to the line like a checklist."}}, "required": ["id"]}}`,
+		"url":    `{"tool_name": "url", "description": "Download a URL to a file in the !url folder. Suggests fread for reading.", "usage": "url <url>", "parameters": {"url": "The full URL to download."}}`,
+		"urltxt": `{"tool_name": "urltxt", "description": "Download a URL and extract text to a file in the !url folder. Suggests fread for reading.", "usage": "urltxt <url>", "parameters": {"url": "The full URL to process."}}`,
+		"build":  `{"tool_name": "build", "description": "Execute the build command defined in settings. Captures output to build.log. Suggests fread for reading logs.", "usage": "build", "parameters": {}}`,
+		"run":    `{"tool_name": "run", "description": "Execute the run command defined in settings. Captures output to run.log and waits 3 seconds. Suggests fread for reading logs.", "usage": "run", "parameters": {}}`,
+		"kill":   `{"tool_name": "kill", "description": "Terminate the running process using the kill command defined in settings.", "usage": "kill", "parameters": {}}`,
+		"help":   `{"tool_name": "help", "description": "List available tools or get detailed info for one tool.", "usage": "help [toolname]", "parameters": {"toolname": "Optional tool name to get info for."}}`,
+		"resume": `{"tool_name": "resume", "description": "Resume the AI automation loop with a message.", "usage": "resume <message>", "parameters": {"message": "Message to send to the AI."}}`,
+	}
+}
+
+func (a *App) getBuiltInToolSyntax() map[string]string {
+	return map[string]string{
 		"fread":  `fread: path [operation: head|tail] [count]   (Reads file content. Large files >2MB require head/tail.)`,
 		"fwrite": `fwrite: path <operation: write|append> <content>   (Modifies or overwrites a file. Backs up to !trash.)`,
 		"rm":     `rm: path   (Remove a file with backup to !trash.)`,
@@ -852,14 +889,27 @@ func (a *App) getBuiltInTools() map[string]string {
 	}
 }
 
-func (a *App) toolHelp(toolname string) string {
+func (a *App) toolHelp(toolname string, isAI bool) string {
 	toolsDir := filepath.Join(a.getExecDir(), "tools")
 	builtIns := a.getBuiltInTools()
+	syntax := a.getBuiltInToolSyntax()
 
 	toolname = strings.TrimSuffix(strings.TrimSpace(toolname), ":")
 
 	if toolname != "" {
 		if desc, ok := builtIns[toolname]; ok {
+			// If AI is asking for help on a tool it's not allowed to use, we should probably tell it it's not found or not allowed.
+			if isAI && !a.isToolAllowed(toolname) {
+				return fmt.Sprintf("Error: Tool '%s' is not allowed.", toolname)
+			}
+
+			// For users, prefer syntax
+			if !isAI {
+				if s, ok := syntax[toolname]; ok {
+					desc = s
+				}
+			}
+
 			// Check for override in files
 			if d, err := os.ReadFile(filepath.Join(toolsDir, toolname+".txt")); err == nil {
 				desc = string(d)
@@ -871,6 +921,9 @@ func (a *App) toolHelp(toolname string) string {
 		tools, _ := a.ListAvailableTools()
 		for _, t := range tools {
 			if t.Name == toolname {
+				if isAI && !a.isToolAllowed(toolname) {
+					continue
+				}
 				return fmt.Sprintf("%s: %s", t.Name, strings.TrimSpace(t.Description))
 			}
 		}
@@ -878,11 +931,15 @@ func (a *App) toolHelp(toolname string) string {
 	}
 
 	tools, _ := a.ListAvailableTools()
-	var allowedNames []string
+	var names []string
 
 	for name := range builtIns {
-		if a.isToolAllowed(name) {
-			allowedNames = append(allowedNames, name)
+		if isAI {
+			if a.isToolAllowed(name) {
+				names = append(names, name)
+			}
+		} else {
+			names = append(names, name)
 		}
 	}
 
@@ -890,11 +947,15 @@ func (a *App) toolHelp(toolname string) string {
 		if _, exists := builtIns[t.Name]; exists {
 			continue // Already listed
 		}
-		if a.isToolAllowed(t.Name) {
-			allowedNames = append(allowedNames, t.Name)
+		if isAI {
+			if a.isToolAllowed(t.Name) {
+				names = append(names, t.Name)
+			}
+		} else {
+			names = append(names, t.Name)
 		}
 	}
-	return strings.Join(allowedNames, ", ") + " (use 'help: toolname' for details)"
+	return strings.Join(names, ", ") + " (use 'help: toolname' for details)"
 }
 
 func (a *App) isToolAllowed(tool string) bool {

@@ -130,9 +130,30 @@ func TestToolRMAndBackup(t *testing.T) {
 func TestToolHelp(t *testing.T) {
 	app, _ := setupTestApp(t)
 
-	output := app.ExecuteTool("help: fwrite", false)
-	if !strings.Contains(output, "Backs up to !trash") {
-		t.Errorf("Expected updated help for fwrite, got: %s", output)
+	// Test User help (syntax)
+	outputUser := app.ExecuteTool("help: fwrite", false)
+	if !strings.Contains(outputUser, "Backs up to !trash") || strings.Contains(outputUser, "{") {
+		t.Errorf("Expected syntax for user, got: %s", outputUser)
+	}
+
+	// Test AI help (JSON)
+	outputAI := app.ExecuteTool("help: fwrite", true)
+	if !strings.Contains(outputAI, `{"tool_name": "fwrite"`) {
+		t.Errorf("Expected JSON for AI, got: %s", outputAI)
+	}
+}
+
+func TestToolPathWithBackslash(t *testing.T) {
+	app, tempDir := setupTestApp(t)
+	defer os.RemoveAll(tempDir)
+
+	os.Mkdir(filepath.Join(tempDir, "subdir"), 0755)
+	os.WriteFile(filepath.Join(tempDir, "subdir", "file.txt"), []byte("test content"), 0644)
+
+	// Simulate Windows-style path input
+	output := app.ExecuteTool(`fread: subdir\file.txt`, false)
+	if output != "test content" {
+		t.Errorf("Expected 'test content', got: %s", output)
 	}
 }
 

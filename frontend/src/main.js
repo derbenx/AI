@@ -101,6 +101,10 @@ function appendMessage(role, content) {
         label = "";
     }
 
+    marked.setOptions({
+        breaks: true,
+        gfm: true
+    });
     div.innerHTML = marked.parse(label + content);
     chatWindow.appendChild(div);
     chatWindow.scrollTop = chatWindow.scrollHeight;
@@ -115,6 +119,10 @@ EventsOn('token', (token) => {
         currentAiMsgDiv = appendMessage('ai', '');
     }
     currentAiContent += token;
+    marked.setOptions({
+        breaks: true,
+        gfm: true
+    });
     currentAiMsgDiv.innerHTML = marked.parse("(AI) " + currentAiContent);
     chatWindow.scrollTop = chatWindow.scrollHeight;
 });
@@ -347,28 +355,7 @@ document.getElementById('reset-prompt-btn').onclick = async () => {
     document.getElementById('code-prompt').value = defaultPrompt;
 };
 
-document.getElementById('code-test-btn').onclick = async () => {
-    isTestMode = !isTestMode;
-    if (isTestMode) {
-        isCodeRunning = false;
-        await SetCodeActive(false);
-        chatInput.disabled = false;
-        sendBtn.disabled = false;
-        document.getElementById('clear-btn').disabled = false;
-        document.getElementById('code-status').textContent = "Mode: Testing";
-
-        const mainTabBtn = document.querySelector('button[onclick*="showTab(this, \'main\')"]');
-        if (mainTabBtn) window.showTab(mainTabBtn, 'main');
-
-        showNotification("Test Mode Enabled: Type commands directly in chat.");
-    } else {
-        document.getElementById('code-status').textContent = "Mode: Stopped";
-        showNotification("Test Mode Disabled.");
-    }
-};
-
 let isCodeRunning = false;
-let isTestMode = false;
 
 document.getElementById('code-start-btn').onclick = async () => {
     const todo = document.getElementById('todo-list').value;
@@ -390,7 +377,6 @@ document.getElementById('code-start-btn').onclick = async () => {
     if (mainTabBtn) window.showTab(mainTabBtn, 'main');
 
     isCodeRunning = true;
-    isTestMode = false;
     document.getElementById('code-status').textContent = "Mode: Started";
     await SetCodeActive(true);
     appendMessage('user', `Starting Code Mode...`);
@@ -420,7 +406,6 @@ document.getElementById('code-resume-btn').onclick = async () => {
     if (mainTabBtn) window.showTab(mainTabBtn, 'main');
 
     isCodeRunning = true;
-    isTestMode = false;
     document.getElementById('code-status').textContent = "Mode: Resumed";
     await SetCodeActive(true);
 
@@ -434,7 +419,6 @@ document.getElementById('code-resume-btn').onclick = async () => {
 
 async function stopCodeMode() {
     isCodeRunning = false;
-    isTestMode = false;
     await SetCodeActive(false);
     chatInput.disabled = false;
     sendBtn.disabled = false;

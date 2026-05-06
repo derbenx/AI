@@ -302,7 +302,7 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 		// Use Code Prompt as System Prompt to ensure persistence
 		systemPrompt = a.config.Personality + "\n\n" + a.config.CodePrompt
 		systemPrompt = strings.ReplaceAll(systemPrompt, "[qa]", fmt.Sprintf("%d", a.config.MemoryLimit))
-		systemPrompt = strings.ReplaceAll(systemPrompt, "[tools]", a.toolHelp(""))
+		systemPrompt = strings.ReplaceAll(systemPrompt, "[tools]", a.toolHelp("", true))
 		// Only emit once at the very start of a session
 		if !strings.HasPrefix(text, "(Tool) ") {
 			wailsruntime.EventsEmit(a.ctx, "system-prompt-display", systemPrompt)
