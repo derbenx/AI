@@ -108,7 +108,10 @@
     <div id="tools-tab" class="tab-content">
         <h2>Tools & Prompt</h2>
         <div class="setting-group">
-            <label>Programming Prompt:</label>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <label>Programming Prompt:</label>
+                <button id="reset-prompt-btn" style="padding: 4px 8px; font-size: 0.8em; background-color: #444;">Reset to Default</button>
+            </div>
             <textarea id="code-prompt" style="height: 200px;"></textarea>
             <small style="color: #888;">[qa] = memory pairs, [tools] = available tools</small>
         </div>

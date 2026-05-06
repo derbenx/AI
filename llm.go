@@ -252,7 +252,11 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 		systemPrompt = a.config.CodePrompt
 		systemPrompt = strings.ReplaceAll(systemPrompt, "[qa]", fmt.Sprintf("%d", a.config.MemoryLimit))
 		systemPrompt = strings.ReplaceAll(systemPrompt, "[tools]", a.toolHelp(""))
+		wailsruntime.EventsEmit(a.ctx, "system-prompt-display", systemPrompt)
 	}
+
+	a.logChat("system", systemPrompt)
+	a.logChat("user", text)
 
 	messages := []Message{
 		{Role: "system", Content: systemPrompt},
@@ -302,6 +306,7 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 
 	// Save to memory
 	a.addToHistory(text, fullResponse)
+	a.logChat("ai", fullResponse)
 	wailsruntime.EventsEmit(a.ctx, "done", fullResponse)
 
 	// If in code mode, check for tool calls
@@ -332,6 +337,7 @@ func (a *App) handleToolCalls(response string) {
 
 			wailsruntime.EventsEmit(a.ctx, "tool-executing", cmd)
 			output := a.ExecuteTool(cmd)
+			a.logChat("tool-output", fmt.Sprintf("[%s] %s", cmd, output))
 			wailsruntime.EventsEmit(a.ctx, "tool-output", output)
 
 			// Automatically send output back to AI

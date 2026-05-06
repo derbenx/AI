@@ -81,3 +81,7 @@ export function GetAINotes() {
 export function UpdateAINotes(arg1) {
   return window['go']['main']['App']['UpdateAINotes'](arg1);
 }
+
+export function GetDefaultCodePrompt() {
+  return window['go']['main']['App']['GetDefaultCodePrompt']();
+}

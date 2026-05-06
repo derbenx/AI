@@ -24,6 +24,7 @@ type App struct {
 	todoList     string
 	aiNotes      string
 	isCodeActive bool
+	sessionLog   string
 }
 
 // NewApp creates a new App application struct
@@ -82,6 +83,16 @@ func (a *App) startup(ctx context.Context) {
 	os.MkdirAll(filepath.Join(baseDir, "clip"), 0755)
 	os.MkdirAll(filepath.Join(baseDir, "llama"), 0755)
 	os.MkdirAll(filepath.Join(baseDir, "tools"), 0755)
+	os.MkdirAll(filepath.Join(baseDir, "logs"), 0755)
+
+	logPrefix := a.config.AppName
+	if logPrefix == "" {
+		logPrefix = filepath.Base(a.config.ProjectFolder)
+	}
+	if logPrefix == "." || logPrefix == "" {
+		logPrefix = "AICoder"
+	}
+	a.sessionLog = filepath.Join(baseDir, "logs", fmt.Sprintf("%s-%s.log", logPrefix, time.Now().Format("02Jan2006-150405")))
 
 	// Handle file drops
 	wailsruntime.OnFileDrop(a.ctx, func(x, y int, paths []string) {
@@ -214,4 +225,18 @@ func (a *App) UpdateAINotes(notes string) {
 
 func (a *App) SetCodeActive(active bool) {
 	a.isCodeActive = active
+}
+
+func (a *App) logChat(role, content string) {
+	f, err := os.OpenFile(a.sessionLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	timestamp := time.Now().Format("15:04:05")
+	f.WriteString(fmt.Sprintf("[%s] %s: %s\n", timestamp, strings.ToUpper(role), content))
+}
+
+func (a *App) GetDefaultCodePrompt() string {
+	return defaultConfig.CodePrompt
 }

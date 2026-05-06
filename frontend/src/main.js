@@ -1,4 +1,4 @@
-import {GetSpecs, GetConfig, SaveSettings, ListModels, ListClips, GetBalancedLayers, SendMessage, ClearHistory, CheckServerExecutable, StartServer, StopServer, IsServerRunning, GetImageBase64, GetFileContent, ListAvailableTools, SendCodeMessage, UpdateTodoList, SetCodeActive, GetAINotes, UpdateAINotes} from '../wailsjs/go/main/App';
+import {GetSpecs, GetConfig, SaveSettings, ListModels, ListClips, GetBalancedLayers, SendMessage, ClearHistory, CheckServerExecutable, StartServer, StopServer, IsServerRunning, GetImageBase64, GetFileContent, ListAvailableTools, SendCodeMessage, UpdateTodoList, SetCodeActive, GetAINotes, UpdateAINotes, GetDefaultCodePrompt} from '../wailsjs/go/main/App';
 import {EventsOn, BrowserOpenURL} from '../wailsjs/runtime/runtime';
 
 let currentImagePath = "";
@@ -128,6 +128,10 @@ EventsOn('code-finished', (msg) => {
 
 EventsOn('notes-updated', (notes) => {
     document.getElementById('ai-notes').value = notes;
+});
+
+EventsOn('system-prompt-display', (prompt) => {
+    appendMessage('ai', `***System Prompt Sent:***\n\n${prompt}`);
 });
 
 EventsOn('todo-updated', (todo) => {
@@ -327,6 +331,11 @@ document.getElementById('save-tools-btn').onclick = async () => {
     showNotification(result);
 };
 
+document.getElementById('reset-prompt-btn').onclick = async () => {
+    const defaultPrompt = await GetDefaultCodePrompt();
+    document.getElementById('code-prompt').value = defaultPrompt;
+};
+
 let isCodeRunning = false;
 
 document.getElementById('code-start-btn').onclick = async () => {
@@ -345,10 +354,10 @@ document.getElementById('code-start-btn').onclick = async () => {
 
     isCodeRunning = true;
     await SetCodeActive(true);
-    appendMessage('user', `Starting Code Mode with tasks:\n${todo}`);
+    appendMessage('user', `Starting Code Mode...`);
 
     try {
-        await SendCodeMessage(todo);
+        await SendCodeMessage("Process the current todo list.");
     } catch (err) {
         appendMessage('ai', `Error: ${err}`);
         await stopCodeMode();
