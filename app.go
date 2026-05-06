@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -15,16 +16,17 @@ import (
 
 // App struct
 type App struct {
-	ctx          context.Context
-	config       Config
-	specs        SystemSpecs
-	server       *LLMServer
-	isStarting   bool
-	interactions []Interaction
-	todoList     string
-	aiNotes      string
-	isCodeActive bool
-	sessionLog   string
+	ctx            context.Context
+	config         Config
+	specs          SystemSpecs
+	server         *LLMServer
+	isStarting     bool
+	interactions   []Interaction
+	todoList       string
+	aiNotes        string
+	isCodeActive   bool
+	sessionLog     string
+	processingLock sync.Mutex
 }
 
 // NewApp creates a new App application struct

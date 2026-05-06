@@ -219,6 +219,9 @@ func (a *App) SendCodeMessage(text string) error {
 }
 
 func (a *App) processMessage(text string, imagePath string, isCodeMode bool) error {
+	a.processingLock.Lock()
+	defer a.processingLock.Unlock()
+
 	if isCodeMode && !a.isCodeActive {
 		return nil // Task cancelled
 	}
@@ -255,7 +258,11 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 		if isCommand {
 			if tool == "resume" {
 				a.isCodeActive = true
-				return a.processMessage("(Tool) resume: "+args, "", true)
+				// Release lock before recursive call to avoid deadlock
+				a.processingLock.Unlock()
+				err := a.processMessage("(Tool) resume: "+args, "", true)
+				a.processingLock.Lock()
+				return err
 			}
 			output := a.ExecuteTool(text, false)
 			a.logChat("tool-output", fmt.Sprintf("[%s] %s", text, output))
@@ -395,7 +402,7 @@ func (a *App) handleToolCalls(response string) {
 
 			// Automatically send output back to AI
 			go func() {
-				time.Sleep(200 * time.Millisecond)
+				// time.Sleep(200 * time.Millisecond) // Removed sleep as mutex handles timing
 				if a.isCodeActive {
 					a.processMessage(fmt.Sprintf("(Tool) %s: %s", cmd, output), "", true)
 				}

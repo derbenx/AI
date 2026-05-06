@@ -143,9 +143,9 @@
             </div>
             <small id="connection-status" style="margin-top: 5px;"></small>
             <div style="margin-top: 10px; padding: 10px; background: #333; border-radius: 4px; font-size: 0.85em;">
-                <p style="margin: 0; color: #aaa;"><strong>Gemma 4 / Jinja Notice:</strong></p>
-                <p style="margin: 5px 0 0; color: #888;">If using Gemma 4 or models requiring Jinja templates, ensure the remote server is started with the <code>--jinja</code> flag.</p>
-                <code style="display: block; margin-top: 5px; color: #44ff44; background: #000; padding: 5px;">llama-server.exe --jinja -m path/to/model.gguf ...</code>
+                <p style="margin: 0; color: #aaa;"><strong>Gemma 4 / Qwen 2.5 / Jinja Notice:</strong></p>
+                <p style="margin: 5px 0 0; color: #888;">Modern models like Gemma 4 and Qwen 2.5 Coder require the <code>--jinja</code> flag for tool calling to work correctly in llama.cpp.</p>
+                <code style="display: block; margin-top: 5px; color: #44ff44; background: #000; padding: 5px; word-break: break-all;">llama-server.exe --jinja -m ../gguf/gemma-4-E2B-it-Q4_K_M.gguf --mmproj ../clip/mmproj-BF16.gguf --host 192.168.1.1</code>
             </div>
         </div>
         <div class="setting-group local-only">
