@@ -316,7 +316,7 @@ func (a *App) handleToolCalls(response string) {
 	lines := strings.Split(response, "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line == "done:" {
+		if line == "done:" || line == "command: done:" {
 			wailsruntime.EventsEmit(a.ctx, "code-finished", "AI has completed the task.")
 			return
 		}

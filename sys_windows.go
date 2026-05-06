@@ -4,6 +4,8 @@ package main
 
 import (
 	"syscall"
+
+	"golang.org/x/sys/windows"
 )
 
 func getSysProcAttr() *syscall.SysProcAttr {
@@ -11,19 +13,19 @@ func getSysProcAttr() *syscall.SysProcAttr {
 }
 
 func isAdmin() bool {
-	var sid *syscall.SID
-	err := syscall.AllocateAndInitializeSid(
-		&syscall.SECURITY_NT_AUTHORITY,
+	var sid *windows.SID
+	err := windows.AllocateAndInitializeSid(
+		&windows.SECURITY_NT_AUTHORITY,
 		2,
-		syscall.SECURITY_BUILTIN_DOMAIN_RID,
-		syscall.DOMAIN_ALIAS_RID_ADMINS,
+		windows.SECURITY_BUILTIN_DOMAIN_RID,
+		windows.DOMAIN_ALIAS_RID_ADMINS,
 		0, 0, 0, 0, 0, 0,
 		&sid)
 	if err != nil {
 		return false
 	}
-	defer syscall.FreeSid(sid)
-	token := syscall.Token(0)
+	defer windows.FreeSid(sid)
+	token := windows.Token(0)
 	member, err := token.IsMember(sid)
 	if err != nil {
 		return false
