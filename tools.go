@@ -102,15 +102,17 @@ func (a *App) ExecuteTool(command string, isAI bool) string {
 		}
 	}
 
+	toolLower := strings.ToLower(tool)
+
 	// Check if tool is allowed for AI. User has access to all existing tools.
-	if isAI && !a.isToolAllowed(tool) {
+	if isAI && !a.isToolAllowed(toolLower) {
 		return fmt.Sprintf("Error: Tool '%s' is not allowed or not found.", tool)
-	} else if !isAI && !a.toolExists(tool) {
+	} else if !isAI && !a.toolExists(toolLower) {
 		return fmt.Sprintf("Error: Tool '%s' not found.", tool)
 	}
 
 	var output string
-	switch tool {
+	switch toolLower {
 	case "fread":
 		output = a.toolFRead(args)
 	case "fwrite":
@@ -143,7 +145,7 @@ func (a *App) ExecuteTool(command string, isAI bool) string {
 		output = a.toolHelp(args, isAI)
 	default:
 		// Try dynamic execution
-		output = a.toolDynamic(tool, args)
+		output = a.toolDynamic(toolLower, args)
 	}
 	return a.sanitizeOutput(output)
 }
@@ -485,32 +487,47 @@ func (a *App) toolLS(path string) string {
 func (a *App) toolNote(args string) string {
 	parts := a.splitArgs(args)
 	content := a.GetAINotes()
-	lines := strings.Split(content, "\n")
+	var lines []string
+	if content != "" {
+		lines = strings.Split(content, "\n")
+	}
 
 	if len(parts) == 0 || parts[0] == "0" {
+		if content == "" {
+			return "No notes found."
+		}
 		return content
 	}
 
 	id, err := strconv.Atoi(parts[0])
-	if err != nil || id < 1 || id > len(lines)+1 {
-		return fmt.Sprintf("Error: Invalid note ID. Number expected for first parameter. See 'help: note'")
+	if err != nil || id < 1 || id > 1000 {
+		return fmt.Sprintf("Error: Invalid note ID. Note ID must be between 1 and 1000. See 'help: note'")
 	}
 
 	if len(parts) > 1 {
 		newNote := strings.Join(parts[1:], " ")
+		// Remove linebreaks to keep note on a single line
+		newNote = strings.ReplaceAll(strings.ReplaceAll(newNote, "\n", " "), "\r", " ")
+
 		if id <= len(lines) {
 			lines[id-1] = newNote
 		} else {
+			// Pad with empty lines if necessary
+			for len(lines) < id-1 {
+				lines = append(lines, "")
+			}
 			lines = append(lines, newNote)
 		}
 		newContent := strings.Join(lines, "\n")
 		a.UpdateAINotes(newContent)
-		wailsruntime.EventsEmit(a.ctx, "notes-updated", newContent)
+		if a.ctx != nil {
+			wailsruntime.EventsEmit(a.ctx, "notes-updated", newContent)
+		}
 		return fmt.Sprintf("Note %d updated.", id)
 	}
 
 	if id > len(lines) {
-		return "Error: Note ID does not exist."
+		return fmt.Sprintf("Note %d: ", id)
 	}
 	return fmt.Sprintf("Note %d: %s", id, lines[id-1])
 }
@@ -877,14 +894,14 @@ func (a *App) getBuiltInToolSyntax() map[string]string {
 		"lines":  `lines: path   (Count the number of lines in a file.)`,
 		"fcopy":  `fcopy: src dst   (Copy or rename a file.)`,
 		"mkdir":  `mkdir: path   (Create a new directory.)`,
-		"note":   `note: id [content]   (Writes/retrieves persistent technical notes. id 0 to read all.)`,
+		"note":   `note: id [content]   (Writes/retrieves technical notes. id 0 to read all. If you want to chatter, use note:.)`,
 		"todo":   `todo: id [action: started|done]   (Manages project checklist. id 0 to read all.)`,
 		"url":    `url: url   (Download a URL to !url folder.)`,
 		"urltxt": `urltxt: url   (Download and extract text from a URL to !url folder.)`,
 		"build":  `build:   (Execute the build command defined in settings. Captures to build.log.)`,
 		"run":    `run:   (Execute the run command defined in settings. Captures to run.log.)`,
 		"kill":   `kill:   (Terminate the running process using settings.)`,
-		"help":   `help: [toolname]   (List available tools or get detailed info for one tool.)`,
+		"help":   `help: [toolname]   (List tools. Note: tools must be called by themselves on a new line with no extra chatter.)`,
 		"resume": `resume: message   (Resume the AI automation loop with a message.)`,
 	}
 }
@@ -959,11 +976,12 @@ func (a *App) toolHelp(toolname string, isAI bool) string {
 }
 
 func (a *App) isToolAllowed(tool string) bool {
-	if tool == "help" || tool == "done:" || tool == "resume" {
+	tool = strings.ToLower(tool)
+	if tool == "help" || tool == "done" || tool == "resume" {
 		return true
 	}
 	for _, t := range a.config.AllowedTools {
-		if t == tool {
+		if strings.ToLower(t) == tool {
 			return true
 		}
 	}
@@ -971,6 +989,7 @@ func (a *App) isToolAllowed(tool string) bool {
 }
 
 func (a *App) toolExists(tool string) bool {
+	tool = strings.ToLower(tool)
 	if tool == "resume" {
 		return true
 	}

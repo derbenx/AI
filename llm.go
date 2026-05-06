@@ -386,28 +386,31 @@ func (a *App) handleToolCalls(response string) {
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
 
-		// Look for command: tool args
-		if strings.HasPrefix(line, "command:") {
-			foundCommand = true
-			cmd := strings.TrimPrefix(line, "command:")
-			cmd = strings.TrimSpace(cmd)
+		// Look for tool calls (e.g., ls: .)
+		colonIdx := strings.Index(line, ":")
+		if colonIdx != -1 {
+			tool := strings.TrimSpace(line[:colonIdx])
+			if a.isToolAllowed(tool) {
+				foundCommand = true
+				cmd := line
+				toolLower := strings.ToLower(tool)
 
-			if cmd == "done:" {
-				wailsruntime.EventsEmit(a.ctx, "code-finished", "AI has completed the task.")
-				return
-			}
-
-			output := a.ExecuteTool(cmd, true)
-			a.logChat("tool-output", fmt.Sprintf("[%s] %s", cmd, output))
-
-			// Automatically send output back to AI
-			go func() {
-				// time.Sleep(200 * time.Millisecond) // Removed sleep as mutex handles timing
-				if a.isCodeActive {
-					a.processMessage(fmt.Sprintf("(Tool) %s: %s", cmd, output), "", true)
+				if toolLower == "done" {
+					wailsruntime.EventsEmit(a.ctx, "code-finished", "AI has completed the task.")
+					return
 				}
-			}()
-			return // Handle one command at a time to keep it sequential
+
+				output := a.ExecuteTool(cmd, true)
+				a.logChat("tool-output", fmt.Sprintf("[%s] %s", cmd, output))
+
+				// Automatically send output back to AI
+				go func() {
+					if a.isCodeActive {
+						a.processMessage(fmt.Sprintf("(Tool) %s: %s", cmd, output), "", true)
+					}
+				}()
+				return // Handle one command at a time to keep it sequential
+			}
 		}
 	}
 

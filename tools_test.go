@@ -21,6 +21,8 @@ func setupTestApp(t *testing.T) (*App, string) {
 			},
 		},
 	}
+	// Mock UpdateAINotes for tests to update app state
+	// In the real app, this is in app.go and updates a.aiNotes
 	return app, tempDir
 }
 
@@ -154,6 +156,44 @@ func TestToolPathWithBackslash(t *testing.T) {
 	output := app.ExecuteTool(`fread: subdir\file.txt`, false)
 	if output != "test content" {
 		t.Errorf("Expected 'test content', got: %s", output)
+	}
+}
+
+
+func TestToolNote(t *testing.T) {
+	app, _ := setupTestApp(t)
+
+	// Test empty notes
+	output := app.ExecuteTool("note: 0", false)
+	if output != "No notes found." {
+		t.Errorf("Expected 'No notes found.', got: %s", output)
+	}
+
+	// Test writing note
+	app.ExecuteTool("note: 1 first note", false)
+	output = app.ExecuteTool("note: 0", false)
+	if !strings.Contains(output, "first note") {
+		t.Errorf("Expected 'first note', got: %s", output)
+	}
+
+	// Test writing specific ID with padding
+	app.ExecuteTool("note: 3 third note", false)
+	output = app.ExecuteTool("note: 0", false)
+	if !strings.Contains(output, "first note") || !strings.Contains(output, "third note") {
+		t.Errorf("Expected padded notes, got: %q", output)
+	}
+
+	// Test reading specific note
+	output = app.ExecuteTool("note: 3", false)
+	if output != "Note 3: third note" {
+		t.Errorf("Expected 'Note 3: third note', got: %s", output)
+	}
+
+	// Test linebreak removal
+	app.ExecuteTool("note: 4 multi\nline\nnote", false)
+	output = app.ExecuteTool("note: 4", false)
+	if output != "Note 4: multi line note" {
+		t.Errorf("Expected 'Note 4: multi line note', got: %q", output)
 	}
 }
 

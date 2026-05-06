@@ -221,6 +221,7 @@ func (a *App) GetAINotes() string {
 
 func (a *App) UpdateAINotes(notes string) {
 	a.aiNotes = notes
+	// config field is lowercase for json tagging
 	a.config.AINotes = notes
 	SaveConfig(a.config)
 }
