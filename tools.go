@@ -81,7 +81,7 @@ func (a *App) sanitizeOutput(output string) string {
 	return strings.ReplaceAll(output, a.config.ProjectFolder, "./")
 }
 
-func (a *App) ExecuteTool(command string) string {
+func (a *App) ExecuteTool(command string, isAI bool) string {
 	command = strings.TrimSpace(strings.TrimPrefix(command, ":"))
 
 	var tool, args string
@@ -96,9 +96,11 @@ func (a *App) ExecuteTool(command string) string {
 		}
 	}
 
-	// Check if tool is allowed
-	if !a.isToolAllowed(tool) {
+	// Check if tool is allowed for AI. User has access to all existing tools.
+	if isAI && !a.isToolAllowed(tool) {
 		return fmt.Sprintf("Error: Tool '%s' is not allowed or not found.", tool)
+	} else if !isAI && !a.toolExists(tool) {
+		return fmt.Sprintf("Error: Tool '%s' not found.", tool)
 	}
 
 	var output string
@@ -175,7 +177,7 @@ func (a *App) toolFRead(args string) string {
 	}
 
 	if info.Size() > 2*1024*1024 && operation == "" {
-		return fmt.Sprintf("This file is %.2fMB, use head or tail.", float64(info.Size())/(1024*1024))
+		return fmt.Sprintf("This file is %.2fMB, use head or tail. Example: 'fread: %s head 50'", float64(info.Size())/(1024*1024), path)
 	}
 
 	if operation == "head" || operation == "tail" {
@@ -320,30 +322,76 @@ func (a *App) toolFWrite(args string) string {
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}
-	a.backupFile(fullPath)
+	backupPath, backedUp := a.backupFile(fullPath)
 
 	err = os.MkdirAll(filepath.Dir(fullPath), 0755)
 	if err != nil {
 		return fmt.Sprintf("Error creating directories: %v", err)
 	}
 
+	var writeErr error
 	if operation == "append" {
 		f, err := os.OpenFile(fullPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
-			return fmt.Sprintf("Error: %v", err)
+			writeErr = err
+		} else {
+			if _, err := f.WriteString(content); err != nil {
+				writeErr = err
+			}
+			f.Close()
 		}
-		defer f.Close()
-		if _, err := f.WriteString(content); err != nil {
-			return fmt.Sprintf("Error: %v", err)
-		}
-		return fmt.Sprintf("File '%s' appended successfully.", path)
+	} else {
+		writeErr = os.WriteFile(fullPath, []byte(content), 0644)
 	}
 
-	err = os.WriteFile(fullPath, []byte(content), 0644)
-	if err != nil {
-		return fmt.Sprintf("Error: %v", err)
+	if writeErr != nil {
+		msg := ""
+		if backedUp {
+			msg = fmt.Sprintf("Existing file was backed up to %s -- Writing data failed: %v.", backupPath, writeErr)
+			// Attempt restore
+			restoreErr := a.restoreFile(backupPath, fullPath)
+			if restoreErr != nil {
+				msg += fmt.Sprintf(" Restoring backup failed: %v. Maybe try to rm: %s or fwrite: with a different filename? You could also suggest the AI make a note of the error with a note:.", restoreErr, path)
+			} else {
+				msg += " Original file restored from backup."
+			}
+		} else {
+			msg = fmt.Sprintf("Error writing to file '%s': %v", path, writeErr)
+		}
+		return msg
 	}
-	return fmt.Sprintf("File '%s' written successfully.", path)
+
+	opDone := operation + "ed"
+	if operation == "write" {
+		opDone = "written"
+	}
+	successMsg := fmt.Sprintf("File '%s' %s successfully.", path, opDone)
+	if backedUp {
+		successMsg += fmt.Sprintf(" (Backup saved to %s)", backupPath)
+	}
+	return successMsg
+}
+
+func (a *App) restoreFile(relBackupPath, fullTargetPath string) error {
+	fullBackupPath, err := a.securePath(relBackupPath)
+	if err != nil {
+		return err
+	}
+
+	src, err := os.Open(fullBackupPath)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	dst, err := os.Create(fullTargetPath)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	_, err = io.Copy(dst, src)
+	return err
 }
 
 func (a *App) toolRM(path string) string {
@@ -351,13 +399,17 @@ func (a *App) toolRM(path string) string {
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}
-	a.backupFile(fullPath)
+	backupPath, backedUp := a.backupFile(fullPath)
 
 	err = os.Remove(fullPath)
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}
-	return fmt.Sprintf("File '%s' removed successfully.", path)
+	msg := fmt.Sprintf("File '%s' removed successfully.", path)
+	if backedUp {
+		msg += fmt.Sprintf(" (Backup saved to %s)", backupPath)
+	}
+	return msg
 }
 
 func (a *App) toolLS(path string) string {
@@ -464,7 +516,7 @@ func (a *App) toolLines(path string) string {
 	for scanner.Scan() {
 		count++
 	}
-	return fmt.Sprintf("%d", count)
+	return fmt.Sprintf("%d. You can read it with fread: %s", count, path)
 }
 
 func (a *App) toolFCopy(args string) string {
@@ -510,7 +562,7 @@ func (a *App) toolMkdir(path string) string {
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}
-	return fmt.Sprintf("Directory '%s' created.", path)
+	return fmt.Sprintf("Directory '%s' created. Use ls: %s to see it.", path, path)
 }
 
 func (a *App) toolTodo(args string) string {
@@ -541,9 +593,9 @@ func (a *App) toolTodo(args string) string {
 	return fmt.Sprintf("Line %d: %s", id, lines[id-1])
 }
 
-func (a *App) backupFile(fullPath string) {
+func (a *App) backupFile(fullPath string) (string, bool) {
 	if _, err := os.Stat(fullPath); err != nil {
-		return
+		return "", false
 	}
 
 	trashDir := filepath.Join(a.config.ProjectFolder, "!trash")
@@ -555,17 +607,23 @@ func (a *App) backupFile(fullPath string) {
 
 	src, err := os.Open(fullPath)
 	if err != nil {
-		return
+		return "", false
 	}
 	defer src.Close()
 
 	dst, err := os.Create(backupPath)
 	if err != nil {
-		return
+		return "", false
 	}
 	defer dst.Close()
 
-	io.Copy(dst, src)
+	_, err = io.Copy(dst, src)
+	if err != nil {
+		return "", false
+	}
+
+	rel, _ := filepath.Rel(a.config.ProjectFolder, backupPath)
+	return rel, true
 }
 
 func (a *App) toolURL(url string, textOnly bool) string {
@@ -627,8 +685,9 @@ func (a *App) toolURL(url string, textOnly bool) string {
 		}
 
 		finalText := strings.TrimSpace(sb.String())
+		relPath := filepath.Join("!url", fileName+".txt")
 		os.WriteFile(fullPath+".txt", []byte(finalText), 0644)
-		return fmt.Sprintf("Saved text to: %s", filepath.Join("!url", fileName+".txt"))
+		return fmt.Sprintf("Saved text to: %s. You can read it with fread: %s", relPath, relPath)
 	}
 
 	out, err := os.Create(fullPath)
@@ -642,7 +701,8 @@ func (a *App) toolURL(url string, textOnly bool) string {
 		return fmt.Sprintf("Error: %v", err)
 	}
 
-	return fmt.Sprintf("Saved to: %s", filepath.Join("!url", fileName))
+	relPath := filepath.Join("!url", fileName)
+	return fmt.Sprintf("Saved to: %s. You can read it with fread: %s", relPath, relPath)
 }
 
 var currentProcess *exec.Cmd
@@ -773,21 +833,22 @@ func (a *App) toolDynamic(tool, args string) string {
 
 func (a *App) getBuiltInTools() map[string]string {
 	return map[string]string{
-		"fread":  `{"tool_name": "fread", "description": "Reads file content. If the file is large, the system will reject a full read; use 'head' or 'tail' to retrieve specific segments.", "parameters": {"type": "object", "properties": {"file_path": {"type": "string", "description": "Relative path to the file (e.g., 'main.go' or 'logs/build.log')."}, "operation": {"type": "string", "enum": ["tail", "head"], "description": "Optional: Read from the top (head) or bottom (tail) of the file."}, "count": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Number of lines to read when using head or tail."}}, "required": ["file_path"]}}`,
-		"fwrite": `{"tool_name": "fwrite", "description": "Modifies or overwrites the content of a specified file", "parameters": {"type": "object", "properties": {"file_path": {"type": "string", "description": "The relative path to the file to be modified (e.g., 'src/main.py')."}, "operation": {"type": "string", "enum": ["write", "append"], "description": "The action to perform on the file. write replaces, append adds to the end."}, "content": {"type": "string", "description": "The new content that should be written to the file."}}, "required": ["file_path", "operation", "content"]}}`,
-		"rm":     `{"tool_name": "rm", "description": "Remove a file (with backup to !trash).", "usage": "rm <path>", "parameters": {"path": "Relative path to the file."}}`,
-		"ls":     `{"tool_name": "ls", "description": "List files and directories in a path or using a glob pattern.", "usage": "ls [path_or_pattern]", "parameters": {"path_or_pattern": "Relative path or glob pattern (e.g., *.go)."}}`,
-		"lines":  `{"tool_name": "lines", "description": "Count the number of lines in a file.", "usage": "lines <path>", "parameters": {"path": "Relative path to the file."}}`,
-		"fcopy":  `{"tool_name": "fcopy", "description": "Copy or rename a file.", "usage": "fcopy <src> <dst>", "parameters": {"src": "Source path.", "dst": "Destination path."}}`,
-		"mkdir":  `{"tool_name": "mkdir", "description": "Create a new directory.", "usage": "mkdir <path>", "parameters": {"path": "Path to create."}}`,
-		"note":   `{"tool_name": "note", "description": "Writes or retrieves persistent technical notes to assist with AI long-term memory.", "parameters": {"type": "object", "properties": {"id": {"type": "integer", "description": "The line number for the note. 0 is used to read the entire list."}, "content": {"type": "string", "description": "The text to be saved, required only for 'write' action."}}, "required": ["id"]}}`,
-		"todo":   `{"tool_name": "todo", "description": "Manages the users project checklist to track progress and prevent task drift.", "parameters": {"type": "object", "properties": {"id": {"type": "integer", "description": "The specific line number to use. Use 0 to read the entire list."}, "action": {"type": "string", "enum": ["started", "done"], "description": "started and done append that word to the line like a checklist."}}, "required": ["id"]}}`,
-		"url":    `{"tool_name": "url", "description": "Download a URL to a file in the !url folder.", "usage": "url <url>", "parameters": {"url": "The full URL to download."}}`,
-		"urltxt": `{"tool_name": "urltxt", "description": "Download a URL and extract text to a file in the !url folder.", "usage": "urltxt <url>", "parameters": {"url": "The full URL to process."}}`,
-		"build":  `{"tool_name": "build", "description": "Execute the build command defined in settings. Captures output to build.log.", "usage": "build", "parameters": {}}`,
-		"run":    `{"tool_name": "run", "description": "Execute the run command defined in settings. Captures output to run.log and waits 3 seconds.", "usage": "run", "parameters": {}}`,
-		"kill":   `{"tool_name": "kill", "description": "Terminate the running process using the kill command defined in settings.", "usage": "kill", "parameters": {}}`,
-		"help":   `{"tool_name": "help", "description": "List available tools or get detailed info for one tool.", "usage": "help [toolname]", "parameters": {"toolname": "Optional tool name to get info for."}}`,
+		"fread":  `fread: path [operation: head|tail] [count]   (Reads file content. Large files >2MB require head/tail.)`,
+		"fwrite": `fwrite: path <operation: write|append> <content>   (Modifies or overwrites a file. Backs up to !trash.)`,
+		"rm":     `rm: path   (Remove a file with backup to !trash.)`,
+		"ls":     `ls: [path_or_pattern]   (List files and directories, supports glob patterns like *.*)`,
+		"lines":  `lines: path   (Count the number of lines in a file.)`,
+		"fcopy":  `fcopy: src dst   (Copy or rename a file.)`,
+		"mkdir":  `mkdir: path   (Create a new directory.)`,
+		"note":   `note: id [content]   (Writes/retrieves persistent technical notes. id 0 to read all.)`,
+		"todo":   `todo: id [action: started|done]   (Manages project checklist. id 0 to read all.)`,
+		"url":    `url: url   (Download a URL to !url folder.)`,
+		"urltxt": `urltxt: url   (Download and extract text from a URL to !url folder.)`,
+		"build":  `build:   (Execute the build command defined in settings. Captures to build.log.)`,
+		"run":    `run:   (Execute the run command defined in settings. Captures to run.log.)`,
+		"kill":   `kill:   (Terminate the running process using settings.)`,
+		"help":   `help: [toolname]   (List available tools or get detailed info for one tool.)`,
+		"resume": `resume: message   (Resume the AI automation loop with a message.)`,
 	}
 }
 
@@ -837,7 +898,7 @@ func (a *App) toolHelp(toolname string) string {
 }
 
 func (a *App) isToolAllowed(tool string) bool {
-	if tool == "help" || tool == "done:" {
+	if tool == "help" || tool == "done:" || tool == "resume" {
 		return true
 	}
 	for _, t := range a.config.AllowedTools {
@@ -845,5 +906,26 @@ func (a *App) isToolAllowed(tool string) bool {
 			return true
 		}
 	}
+	return false
+}
+
+func (a *App) toolExists(tool string) bool {
+	if tool == "resume" {
+		return true
+	}
+	builtIns := a.getBuiltInTools()
+	if _, ok := builtIns[tool]; ok {
+		return true
+	}
+
+	toolsDir := filepath.Join(a.getExecDir(), "tools")
+	executable := filepath.Join(toolsDir, tool)
+	if runtime.GOOS == "windows" {
+		executable += ".exe"
+	}
+	if _, err := os.Stat(executable); err == nil {
+		return true
+	}
+
 	return false
 }

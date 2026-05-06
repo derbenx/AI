@@ -221,6 +221,49 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 	if isCodeMode && !a.isCodeActive {
 		return nil // Task cancelled
 	}
+
+	// Intercept user commands (not from AI/Tool)
+	if !strings.HasPrefix(text, "(Tool) ") {
+		trimmed := strings.TrimSpace(text)
+		isCommand := false
+		var tool, args string
+
+		if strings.HasPrefix(trimmed, ":") {
+			isCommand = true
+			cmdBody := strings.TrimPrefix(trimmed, ":")
+			if idx := strings.Index(cmdBody, ":"); idx != -1 {
+				tool = strings.TrimSpace(cmdBody[:idx])
+				args = strings.TrimSpace(cmdBody[idx+1:])
+			} else {
+				parts := strings.SplitN(cmdBody, " ", 2)
+				tool = parts[0]
+				if len(parts) > 1 {
+					args = parts[1]
+				}
+			}
+		} else if idx := strings.Index(trimmed, ":"); idx != -1 {
+			// Check if the prefix is a known tool
+			possibleTool := strings.TrimSpace(trimmed[:idx])
+			if a.toolExists(possibleTool) {
+				isCommand = true
+				tool = possibleTool
+				args = strings.TrimSpace(trimmed[idx+1:])
+			}
+		}
+
+		if isCommand {
+			if tool == "resume" {
+				a.isCodeActive = true
+				return a.processMessage("(Tool) resume: "+args, "", true)
+			}
+			output := a.ExecuteTool(text, false)
+			a.logChat("tool-output", fmt.Sprintf("[%s] %s", text, output))
+			wailsruntime.EventsEmit(a.ctx, "internal-tool-message", fmt.Sprintf("Command Output: %s", output))
+			wailsruntime.EventsEmit(a.ctx, "done", "") // Signal UI that we're done processing command
+			return nil
+		}
+	}
+
 	if a.server == nil && a.isLocalServer() {
 		return fmt.Errorf("Server not running. Please start a llama_server from the Server tab.")
 	}
@@ -346,7 +389,7 @@ func (a *App) handleToolCalls(response string) {
 				return
 			}
 
-			output := a.ExecuteTool(cmd)
+			output := a.ExecuteTool(cmd, true)
 			a.logChat("tool-output", fmt.Sprintf("[%s] %s", cmd, output))
 
 			// Automatically send output back to AI

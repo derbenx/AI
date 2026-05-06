@@ -268,5 +268,5 @@ func (a *App) GetDefaultCodePrompt() string {
 }
 
 func (a *App) TestTool(command string) string {
-	return a.ExecuteTool(command)
+	return a.ExecuteTool(command, false)
 }
