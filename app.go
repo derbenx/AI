@@ -247,7 +247,20 @@ func (a *App) logChat(role, content string) {
 	}
 	defer f.Close()
 	timestamp := time.Now().Format("15:04:05")
-	f.WriteString(fmt.Sprintf("[%s] %s: %s\n", timestamp, strings.ToUpper(role), content))
+
+	roleLabel := role
+	switch strings.ToLower(role) {
+	case "user":
+		roleLabel = "(User)"
+	case "ai":
+		roleLabel = "(AI)"
+	case "tool-output", "tool":
+		roleLabel = "(Tool)"
+	case "system":
+		roleLabel = "(System)"
+	}
+
+	f.WriteString(fmt.Sprintf("[%s] %s %s\n", timestamp, roleLabel, content))
 }
 
 func (a *App) GetDefaultCodePrompt() string {

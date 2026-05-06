@@ -73,6 +73,14 @@ func (a *App) ListAvailableTools() ([]ToolInfo, error) {
 	return tools, nil
 }
 
+func (a *App) sanitizeOutput(output string) string {
+	if a.config.ProjectFolder == "" {
+		return output
+	}
+	// Replace absolute project path with ./
+	return strings.ReplaceAll(output, a.config.ProjectFolder, "./")
+}
+
 func (a *App) ExecuteTool(command string) string {
 	command = strings.TrimSpace(strings.TrimPrefix(command, ":"))
 
@@ -93,41 +101,43 @@ func (a *App) ExecuteTool(command string) string {
 		return fmt.Sprintf("Error: Tool '%s' is not allowed or not found.", tool)
 	}
 
+	var output string
 	switch tool {
 	case "fread":
-		return a.toolFRead(args)
+		output = a.toolFRead(args)
 	case "fwrite":
-		return a.toolFWrite(args)
+		output = a.toolFWrite(args)
 	case "rm":
-		return a.toolRM(args)
+		output = a.toolRM(args)
 	case "ls":
-		return a.toolLS(args)
+		output = a.toolLS(args)
 	case "note":
-		return a.toolNote(args)
+		output = a.toolNote(args)
 	case "todo":
-		return a.toolTodo(args)
+		output = a.toolTodo(args)
 	case "url":
-		return a.toolURL(args, false)
+		output = a.toolURL(args, false)
 	case "urltxt":
-		return a.toolURL(args, true)
+		output = a.toolURL(args, true)
 	case "build":
-		return a.toolBuild()
+		output = a.toolBuild()
 	case "run":
-		return a.toolRun()
+		output = a.toolRun()
 	case "kill":
-		return a.toolKill()
+		output = a.toolKill()
 	case "lines":
-		return a.toolLines(args)
+		output = a.toolLines(args)
 	case "fcopy":
-		return a.toolFCopy(args)
+		output = a.toolFCopy(args)
 	case "mkdir":
-		return a.toolMkdir(args)
+		output = a.toolMkdir(args)
 	case "help":
-		return a.toolHelp(args)
+		output = a.toolHelp(args)
 	default:
 		// Try dynamic execution
-		return a.toolDynamic(tool, args)
+		output = a.toolDynamic(tool, args)
 	}
+	return a.sanitizeOutput(output)
 }
 
 func (a *App) securePath(path string) (string, error) {
@@ -376,6 +386,15 @@ func (a *App) toolLS(path string) string {
 			}
 		}
 		return sb.String()
+	}
+
+	stat, err := os.Stat(fullPath)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+
+	if !stat.IsDir() {
+		return fmt.Sprintf("%-6d %s", stat.Size(), filepath.Base(fullPath))
 	}
 
 	files, err := os.ReadDir(fullPath)

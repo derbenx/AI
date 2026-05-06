@@ -90,7 +90,18 @@ function appendMessage(role, content) {
     const div = document.createElement('div');
     div.className = `message ${role}`;
     div.id = role === 'ai' ? 'latest-ai-msg' : '';
-    div.innerHTML = marked.parse(content);
+
+    let label = "";
+    if (role === 'user') label = "(User) ";
+    else if (role === 'ai') label = "(AI) ";
+    else if (role === 'tool') label = "(Tool) ";
+
+    // Avoid double labeling if content already has it
+    if (content.startsWith(label)) {
+        label = "";
+    }
+
+    div.innerHTML = marked.parse(label + content);
     chatWindow.appendChild(div);
     chatWindow.scrollTop = chatWindow.scrollHeight;
     return div;
@@ -104,7 +115,7 @@ EventsOn('token', (token) => {
         currentAiMsgDiv = appendMessage('ai', '');
     }
     currentAiContent += token;
-    currentAiMsgDiv.innerHTML = marked.parse(currentAiContent);
+    currentAiMsgDiv.innerHTML = marked.parse("(AI) " + currentAiContent);
     chatWindow.scrollTop = chatWindow.scrollHeight;
 });
 
@@ -132,6 +143,10 @@ EventsOn('todo-updated', (todo) => {
 
 EventsOn('internal-user-message', (msg) => {
     appendMessage('user', msg);
+});
+
+EventsOn('internal-tool-message', (msg) => {
+    appendMessage('tool', msg);
 });
 
 EventsOn('server-log', (log) => {

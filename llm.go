@@ -253,17 +253,20 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 		systemPrompt = strings.ReplaceAll(systemPrompt, "[qa]", fmt.Sprintf("%d", a.config.MemoryLimit))
 		systemPrompt = strings.ReplaceAll(systemPrompt, "[tools]", a.toolHelp(""))
 		// Only emit once at the very start of a session
-		if !strings.HasPrefix(text, "output: ") {
+		if !strings.HasPrefix(text, "(Tool) ") {
 			wailsruntime.EventsEmit(a.ctx, "system-prompt-display", systemPrompt)
 		}
 	}
 
-	if !strings.HasPrefix(text, "output: ") {
+	if !strings.HasPrefix(text, "(Tool) ") {
 		a.logChat("system", systemPrompt)
 	}
-	a.logChat("user", text)
-	if isCodeMode && strings.HasPrefix(text, "output: ") {
-		wailsruntime.EventsEmit(a.ctx, "internal-user-message", text)
+
+	if strings.HasPrefix(text, "(Tool) ") {
+		a.logChat("tool", text)
+		wailsruntime.EventsEmit(a.ctx, "internal-tool-message", text)
+	} else {
+		a.logChat("user", text)
 	}
 
 	messages := []Message{
@@ -350,7 +353,7 @@ func (a *App) handleToolCalls(response string) {
 			go func() {
 				time.Sleep(200 * time.Millisecond)
 				if a.isCodeActive {
-					a.processMessage(fmt.Sprintf("output: %s: %s", cmd, output), "", true)
+					a.processMessage(fmt.Sprintf("(Tool) %s: %s", cmd, output), "", true)
 				}
 			}()
 			return // Handle one command at a time to keep it sequential
