@@ -20,7 +20,7 @@ type ToolInfo struct {
 }
 
 func (a *App) ListAvailableTools() ([]ToolInfo, error) {
-	toolsDir := filepath.Join("build", "bin", "tools")
+	toolsDir := filepath.Join(a.getExecDir(), "tools")
 	if _, err := os.Stat(toolsDir); os.IsNotExist(err) {
 		err := os.MkdirAll(toolsDir, 0755)
 		if err != nil {
@@ -33,23 +33,48 @@ func (a *App) ListAvailableTools() ([]ToolInfo, error) {
 		return nil, err
 	}
 
+	builtIns := a.getBuiltInTools()
+
 	var tools []ToolInfo
+	seen := make(map[string]bool)
+
+	// Add built-ins first
+	for name, defaultDesc := range builtIns {
+		desc := []byte(defaultDesc)
+		if d, err := os.ReadFile(filepath.Join(toolsDir, name+".txt")); err == nil {
+			desc = d
+		} else if d, err := os.ReadFile(filepath.Join(toolsDir, name+".json")); err == nil {
+			desc = d
+		}
+		tools = append(tools, ToolInfo{
+			Name:        name,
+			Description: string(desc),
+		})
+		seen[name] = true
+	}
+
+	// Add dynamic tools
 	for _, file := range files {
-		if !file.IsDir() && strings.HasSuffix(file.Name(), ".txt") {
-			name := strings.TrimSuffix(file.Name(), ".txt")
+		if !file.IsDir() && (strings.HasSuffix(file.Name(), ".txt") || strings.HasSuffix(file.Name(), ".json")) {
+			name := strings.TrimSuffix(strings.TrimSuffix(file.Name(), ".txt"), ".json")
+			if seen[name] {
+				continue
+			}
 			description, _ := os.ReadFile(filepath.Join(toolsDir, file.Name()))
 			tools = append(tools, ToolInfo{
 				Name:        name,
 				Description: string(description),
 			})
+			seen[name] = true
 		}
 	}
 	return tools, nil
 }
 
 func (a *App) ExecuteTool(command string) string {
+	command = strings.TrimPrefix(command, ":")
 	parts := strings.SplitN(command, " ", 2)
-	tool := parts[0]
+	tool := strings.TrimSuffix(parts[0], ":")
 	args := ""
 	if len(parts) > 1 {
 		args = parts[1]
@@ -71,6 +96,10 @@ func (a *App) ExecuteTool(command string) string {
 		return a.toolLS(args)
 	case "note":
 		return a.toolNote(args)
+	case "todo":
+		return a.toolTodo()
+	case "update_todo":
+		return a.toolUpdateTodo(args)
 	case "url":
 		return a.toolURL(args, false)
 	case "urltxt":
@@ -80,7 +109,7 @@ func (a *App) ExecuteTool(command string) string {
 	case "kill":
 		return a.toolKill()
 	case "help":
-		return a.toolHelp()
+		return a.toolHelp(args)
 	default:
 		// Try dynamic execution
 		return a.toolDynamic(tool, args)
@@ -120,13 +149,56 @@ func (a *App) toolFRead(path string) string {
 	return string(content)
 }
 
+func (a *App) splitArgs(args string) []string {
+	var result []string
+	var current strings.Builder
+	inQuotes := false
+	quoteChar := rune(0)
+
+	for _, r := range args {
+		if (r == '"' || r == '\'') && !inQuotes {
+			inQuotes = true
+			quoteChar = r
+		} else if r == quoteChar && inQuotes {
+			inQuotes = false
+			quoteChar = rune(0)
+		} else if r == ' ' && !inQuotes {
+			if current.Len() > 0 {
+				result = append(result, current.String())
+				current.Reset()
+			}
+		} else {
+			current.WriteRune(r)
+		}
+	}
+	if current.Len() > 0 {
+		result = append(result, current.String())
+	}
+	return result
+}
+
 func (a *App) toolFWrite(args string) string {
-	parts := strings.SplitN(args, " ", 2)
+	parts := a.splitArgs(args)
 	if len(parts) < 2 {
-		return "Error: fwrite requires <path> <content>"
+		return "Error: fwrite requires <path> <content>. Use quotes if path has spaces."
 	}
 	path := parts[0]
-	content := parts[1]
+	content := strings.Join(parts[1:], " ")
+	// If the user used quotes for content, it might be better to use the original string slice from first space
+	if firstSpace := strings.Index(args, " "); firstSpace != -1 {
+		// Attempt to extract content more accurately
+		remaining := strings.TrimSpace(args[firstSpace:])
+		if strings.HasPrefix(remaining, path) {
+			// path was likely quoted, find where it ends
+			pathEnd := strings.Index(args, path) + len(path)
+			if strings.HasPrefix(args[pathEnd:], "\"") || strings.HasPrefix(args[pathEnd:], "'") {
+				pathEnd++
+			}
+			content = strings.TrimSpace(args[pathEnd:])
+		} else {
+			content = remaining
+		}
+	}
 
 	fullPath, err := a.securePath(path)
 	if err != nil {
@@ -210,6 +282,19 @@ func (a *App) toolNote(note string) string {
 	return "Note saved."
 }
 
+func (a *App) toolTodo() string {
+	// We need a way to get the todo from UI.
+	// For now we'll request it via event or just return a placeholder
+	// if we haven't implemented GetTodoList yet.
+	return a.GetTodoList()
+}
+
+func (a *App) toolUpdateTodo(todo string) string {
+	a.UpdateTodoList(todo)
+	wailsruntime.EventsEmit(a.ctx, "todo-updated", todo)
+	return "Todo list updated."
+}
+
 func (a *App) backupFile(fullPath string) {
 	if _, err := os.Stat(fullPath); err != nil {
 		return
@@ -243,12 +328,6 @@ func (a *App) toolURL(url string, textOnly bool) string {
 	}
 	fileName := fmt.Sprintf("%s.%s", safeName, timestamp)
 	fullPath := filepath.Join(urlDir, fileName)
-
-	out, err := os.Create(fullPath)
-	if err != nil {
-		return fmt.Sprintf("Error: %v", err)
-	}
-	defer out.Close()
 
 	if textOnly {
 		body, _ := io.ReadAll(resp.Body)
@@ -295,6 +374,12 @@ func (a *App) toolURL(url string, textOnly bool) string {
 		return fmt.Sprintf("Saved text to: %s", filepath.Join("!url", fileName+".txt"))
 	}
 
+	out, err := os.Create(fullPath)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	defer out.Close()
+
 	_, err = io.Copy(out, resp.Body)
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
@@ -317,7 +402,6 @@ func (a *App) toolRun(args string) string {
 
 	// Replace placeholders
 	cmdStr = strings.ReplaceAll(cmdStr, "{app}", a.config.AppName)
-	cmdStr = strings.ReplaceAll(cmdStr, "{user}", a.config.Username)
 
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
@@ -378,7 +462,7 @@ func (a *App) toolKill() string {
 }
 
 func (a *App) toolDynamic(tool, args string) string {
-	toolsDir := filepath.Join("build", "bin", "tools")
+	toolsDir := filepath.Join(a.getExecDir(), "tools")
 	executable := filepath.Join(toolsDir, tool)
 	if runtime.GOOS == "windows" {
 		executable += ".exe"
@@ -388,7 +472,7 @@ func (a *App) toolDynamic(tool, args string) string {
 		return fmt.Sprintf("Error: Unknown tool or executable '%s' not found.", tool)
 	}
 
-	cmd := exec.Command(executable, strings.Fields(args)...)
+	cmd := exec.Command(executable, a.splitArgs(args)...)
 	cmd.Dir = a.config.ProjectFolder
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -397,20 +481,47 @@ func (a *App) toolDynamic(tool, args string) string {
 	return string(out)
 }
 
-func (a *App) toolHelp() string {
-	// Built-in tools
-	builtIns := map[string]string{
-		"fread":  "Read file content. Usage: fread <path>",
-		"fwrite": "Write file content. Usage: fwrite <path> <content>",
-		"rm":     "Remove a file. Usage: rm <path>",
-		"ls":     "List files. Usage: ls [path]",
-		"note":   "Save a note for yourself. Usage: note <text>",
-		"url":    "Download URL to file. Usage: url <url>",
-		"urltxt": "Download URL as text. Usage: urltxt <url>",
-		"run":    "Run the app. Usage: run [args]",
-		"kill":   "Kill the app. Usage: kill",
-		"help":   "Show this help.",
-		"done:":  "Signal completion.",
+func (a *App) getBuiltInTools() map[string]string {
+	return map[string]string{
+		"fread":  `{"name": "fread", "description": "Read the content of a file.", "usage": "fread <path>", "parameters": {"path": "Relative path to the file."}}`,
+		"fwrite": `{"name": "fwrite", "description": "Write content to a file. Overwrites if exists (with backup).", "usage": "fwrite <path> <content>", "parameters": {"path": "Relative path to the file.", "content": "The text content to write."}}`,
+		"rm":     `{"name": "rm", "description": "Remove a file (with backup to !trash).", "usage": "rm <path>", "parameters": {"path": "Relative path to the file."}}`,
+		"ls":     `{"name": "ls", "description": "List files and directories in a path or using a glob pattern.", "usage": "ls [path_or_pattern]", "parameters": {"path_or_pattern": "Relative path or glob pattern (e.g., *.go)."}}`,
+		"note":   `{"name": "note", "description": "Persist technical data or memory to the UI notes list.", "usage": "note <text>", "parameters": {"text": "The information to persist."}}`,
+		"todo":        `{"name": "todo", "description": "Read the current user checklist.", "usage": "todo", "parameters": {}}`,
+		"update_todo": `{"name": "update_todo", "description": "Update the user todo checklist in the UI.", "usage": "update_todo <new_todo_content>", "parameters": {"new_todo_content": "The full new content for the todo list."}}`,
+		"url":    `{"name": "url", "description": "Download a URL to a file in the !url folder.", "usage": "url <url>", "parameters": {"url": "The full URL to download."}}`,
+		"urltxt": `{"name": "urltxt", "description": "Download a URL and extract text to a file in the !url folder.", "usage": "urltxt <url>", "parameters": {"url": "The full URL to process."}}`,
+		"run":    `{"name": "run", "description": "Execute the build/run command defined in settings.", "usage": "run [args]", "parameters": {"args": "Optional additional arguments."}}`,
+		"kill":   `{"name": "kill", "description": "Terminate the running process.", "usage": "kill", "parameters": {}}`,
+		"help":   `{"name": "help", "description": "List available tools or get detailed info for one tool.", "usage": "help [toolname]", "parameters": {"toolname": "Optional tool name to get info for."}}`,
+		"done:":  `{"name": "done:", "description": "Signal that the task is complete.", "usage": "done:", "parameters": {}}`,
+	}
+}
+
+func (a *App) toolHelp(toolname string) string {
+	toolsDir := filepath.Join(a.getExecDir(), "tools")
+	builtIns := a.getBuiltInTools()
+
+	toolname = strings.TrimSuffix(strings.TrimSpace(toolname), ":")
+
+	if toolname != "" {
+		if desc, ok := builtIns[toolname]; ok {
+			// Check for override in files
+			if d, err := os.ReadFile(filepath.Join(toolsDir, toolname+".txt")); err == nil {
+				desc = string(d)
+			} else if d, err := os.ReadFile(filepath.Join(toolsDir, toolname+".json")); err == nil {
+				desc = string(d)
+			}
+			return fmt.Sprintf("%s: %s", toolname, desc)
+		}
+		tools, _ := a.ListAvailableTools()
+		for _, t := range tools {
+			if t.Name == toolname {
+				return fmt.Sprintf("%s: %s", t.Name, strings.TrimSpace(t.Description))
+			}
+		}
+		return fmt.Sprintf("Error: Tool '%s' not found.", toolname)
 	}
 
 	tools, _ := a.ListAvailableTools()

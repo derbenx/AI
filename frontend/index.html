@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta content="width=device-width, initial-scale=1.0" name="viewport">
-    <title>Gemma Loader</title>
+    <title>AI Coder</title>
     <link rel="stylesheet" href="./src/app.css">
 </head>
 <body>
@@ -11,6 +11,7 @@
     <div id="tabs">
         <button class="tab-btn active" onclick="showTab(this, 'main')">Main</button>
         <button class="tab-btn" onclick="showTab(this, 'code')">Code</button>
+        <button class="tab-btn" onclick="showTab(this, 'tools')">Tools</button>
         <button class="tab-btn" onclick="showTab(this, 'code-setup')">Code Setup</button>
         <button class="tab-btn local-only" onclick="showTab(this, 'server')">Server</button>
         <button class="tab-btn" onclick="showTab(this, 'settings')">Settings</button>
@@ -77,6 +78,10 @@
 
     <div id="code-setup-tab" class="tab-content">
         <h2>Code Setup</h2>
+        <div id="account-warning" style="background-color: #442222; padding: 15px; border-left: 4px solid #ff4444; margin-bottom: 20px; display: none;">
+            <p style="margin: 0; font-weight: bold;">⚠️ This is an administrator account</p>
+            <p style="margin: 5px 0 0; font-size: 0.9em;">If you want to use build and run commands, it's recommended to run this app under a user (non-admin) account using "Right-click -> Run as different user" or by logging in as a standard user.</p>
+        </div>
         <div class="setting-group">
             <label>Project Folder:</label>
             <input type="text" id="project-folder" placeholder="C:\path\to\project">
@@ -91,33 +96,29 @@
         </div>
         <div class="setting-group">
             <label>Run Command:</label>
-            <input type="text" id="run-command" placeholder="runas /user:{user} {app}">
+            <input type="text" id="run-command" placeholder="{app}">
         </div>
         <div class="setting-group">
             <label>Kill Command:</label>
             <input type="text" id="kill-command" placeholder="taskkill /f /im {app}">
         </div>
+        <button id="save-code-setup-btn">Save Code Setup</button>
+    </div>
+
+    <div id="tools-tab" class="tab-content">
+        <h2>Tools & Prompt</h2>
         <div class="setting-group">
-            <label>User account {user}:</label>
-            <input type="text" id="username" placeholder="Administrator">
-            <small id="admin-warning" style="color: #ff4444; display: none;">Warning: Using an admin account is risky!</small>
-        </div>
-        <div class="setting-group">
-            <label>Password:</label>
-            <input type="password" id="password" placeholder="Password (if needed)">
-        </div>
-        <div class="setting-group">
-            <label>Prompt:</label>
-            <textarea id="code-prompt" style="height: 100px;"></textarea>
+            <label>Programming Prompt:</label>
+            <textarea id="code-prompt" style="height: 200px;"></textarea>
             <small style="color: #888;">[qa] = memory pairs, [tools] = available tools</small>
         </div>
         <div class="setting-group">
-            <label>Allowed Commands:</label>
-            <div id="tools-checkboxes" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px;">
+            <label>Enabled Tools:</label>
+            <div id="tools-checkboxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px;">
                 <!-- Dynamically populated -->
             </div>
         </div>
-        <button id="save-code-setup-btn">Save Code Setup</button>
+        <button id="save-tools-btn">Save Tools & Prompt</button>
     </div>
 
     <div id="settings-tab" class="tab-content">

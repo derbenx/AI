@@ -1,4 +1,4 @@
-import {GetSpecs, GetConfig, SaveSettings, ListModels, ListClips, GetBalancedLayers, SendMessage, ClearHistory, CheckServerExecutable, StartServer, StopServer, IsServerRunning, GetImageBase64, GetFileContent, ListAvailableTools, SendCodeMessage} from '../wailsjs/go/main/App';
+import {GetSpecs, GetConfig, SaveSettings, ListModels, ListClips, GetBalancedLayers, SendMessage, ClearHistory, CheckServerExecutable, StartServer, StopServer, IsServerRunning, GetImageBase64, GetFileContent, ListAvailableTools, SendCodeMessage, UpdateTodoList, SetCodeActive} from '../wailsjs/go/main/App';
 import {EventsOn, BrowserOpenURL} from '../wailsjs/runtime/runtime';
 
 let currentImagePath = "";
@@ -132,6 +132,10 @@ EventsOn('ai-note', (note) => {
     aiNotesArea.scrollTop = aiNotesArea.scrollHeight;
 });
 
+EventsOn('todo-updated', (todo) => {
+    document.getElementById('todo-list').value = todo;
+});
+
 EventsOn('server-log', (log) => {
     const logArea = document.getElementById('server-log');
     logArea.value += log + "\n";
@@ -236,16 +240,29 @@ async function initSettings() {
 }
 
 async function initCodeSetup() {
+    const specs = await GetSpecs();
+    if (specs.is_admin) {
+        document.getElementById('account-warning').style.display = 'block';
+    }
+
     const config = await GetConfig();
     document.getElementById('project-folder').value = config.project_folder || "";
     document.getElementById('app-name').value = config.app_name || "";
     document.getElementById('build-command').value = config.build_command || "build {app}";
-    document.getElementById('run-command').value = config.run_command || "runas /noprofile /user:{user} “cmd.exe -m {app}”";
+    document.getElementById('run-command').value = config.run_command || "{app}";
     document.getElementById('kill-command').value = config.kill_command || "kill {app}";
-    document.getElementById('username').value = config.username || "";
-    document.getElementById('password').value = config.password || "";
     document.getElementById('code-prompt').value = config.code_prompt || "";
 
+    await refreshTools();
+
+    const todoInput = document.getElementById('todo-list');
+    todoInput.oninput = async () => {
+        await UpdateTodoList(todoInput.value);
+    };
+}
+
+async function refreshTools() {
+    const config = await GetConfig();
     const tools = await ListAvailableTools();
     const toolsContainer = document.getElementById('tools-checkboxes');
     toolsContainer.innerHTML = "";
@@ -254,6 +271,7 @@ async function initCodeSetup() {
         div.style.display = 'flex';
         div.style.alignItems = 'center';
         div.style.gap = '5px';
+        div.className = 'tool-checkbox-item';
 
         const cb = document.createElement('input');
         cb.type = 'checkbox';
@@ -266,33 +284,15 @@ async function initCodeSetup() {
         const lbl = document.createElement('label');
         lbl.htmlFor = `tool-${t.name}`;
         lbl.textContent = t.name;
-        lbl.title = t.description;
+        lbl.title = t.description; // Tooltip
 
         div.appendChild(cb);
         div.appendChild(lbl);
         toolsContainer.appendChild(div);
     });
-
-    const usernameInput = document.getElementById('username');
-    const adminWarning = document.getElementById('admin-warning');
-    const updateAdminWarning = () => {
-        const user = usernameInput.value.toLowerCase();
-        if (user === 'admin' || user === 'administrator') {
-            adminWarning.style.display = 'block';
-        } else {
-            adminWarning.style.display = 'none';
-        }
-    };
-    usernameInput.oninput = updateAdminWarning;
-    updateAdminWarning();
 }
 
 document.getElementById('save-code-setup-btn').onclick = async () => {
-    const allowed_tools = [];
-    document.querySelectorAll('#tools-checkboxes input[type="checkbox"]').forEach(cb => {
-        if (cb.checked) allowed_tools.push(cb.value);
-    });
-
     const currentConfig = await GetConfig();
     const config = {
         ...currentConfig,
@@ -301,8 +301,20 @@ document.getElementById('save-code-setup-btn').onclick = async () => {
         build_command: document.getElementById('build-command').value,
         run_command: document.getElementById('run-command').value,
         kill_command: document.getElementById('kill-command').value,
-        username: document.getElementById('username').value,
-        password: document.getElementById('password').value,
+    };
+    const result = await SaveSettings(config);
+    showNotification(result);
+};
+
+document.getElementById('save-tools-btn').onclick = async () => {
+    const allowed_tools = [];
+    document.querySelectorAll('#tools-checkboxes input[type="checkbox"]').forEach(cb => {
+        if (cb.checked) allowed_tools.push(cb.value);
+    });
+
+    const currentConfig = await GetConfig();
+    const config = {
+        ...currentConfig,
         code_prompt: document.getElementById('code-prompt').value,
         allowed_tools: allowed_tools
     };
@@ -319,6 +331,7 @@ document.getElementById('code-start-btn').onclick = async () => {
         return;
     }
 
+    await UpdateTodoList(todo);
     await ClearHistory();
     chatWindow.innerHTML = "";
     chatInput.disabled = true;
@@ -326,37 +339,41 @@ document.getElementById('code-start-btn').onclick = async () => {
     document.getElementById('clear-btn').disabled = true;
 
     isCodeRunning = true;
+    await SetCodeActive(true);
     appendMessage('user', `Starting Code Mode with tasks:\n${todo}`);
 
     try {
         await SendCodeMessage(todo);
     } catch (err) {
         appendMessage('ai', `Error: ${err}`);
-        stopCodeMode();
+        await stopCodeMode();
     }
 };
 
-document.getElementById('code-stop-btn').onclick = () => {
-    stopCodeMode();
+document.getElementById('code-stop-btn').onclick = async () => {
+    await stopCodeMode();
 };
 
 document.getElementById('code-resume-btn').onclick = async () => {
     const todo = document.getElementById('todo-list').value;
+    await UpdateTodoList(todo);
     chatInput.disabled = true;
     sendBtn.disabled = true;
     document.getElementById('clear-btn').disabled = true;
     isCodeRunning = true;
+    await SetCodeActive(true);
 
     try {
         await SendCodeMessage("Resuming task: " + todo);
     } catch (err) {
         appendMessage('ai', `Error: ${err}`);
-        stopCodeMode();
+        await stopCodeMode();
     }
 };
 
-function stopCodeMode() {
+async function stopCodeMode() {
     isCodeRunning = false;
+    await SetCodeActive(false);
     chatInput.disabled = false;
     sendBtn.disabled = false;
     document.getElementById('clear-btn').disabled = false;

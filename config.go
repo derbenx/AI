@@ -21,11 +21,9 @@ type Config struct {
 	BuildCommand  string   `json:"build_command"`
 	RunCommand    string   `json:"run_command"`
 	KillCommand   string   `json:"kill_command"`
-	AppName       string   `json:"app_name"`
-	Username      string   `json:"username"`
-	Password      string   `json:"password"`
-	CodePrompt    string   `json:"code_prompt"`
-	AllowedTools  []string `json:"allowed_tools"`
+	AppName      string   `json:"app_name"`
+	CodePrompt   string   `json:"code_prompt"`
+	AllowedTools []string `json:"allowed_tools"`
 }
 
 var defaultConfig = Config{
@@ -36,10 +34,10 @@ var defaultConfig = Config{
 	GPULayers:     0,
 	ServerURL:     "http://127.0.0.1:8080",
 	ServerMode:    "local",
-	BuildCommand:  "build {app}",
-	RunCommand:    "runas /noprofile /user:{user} \"cmd.exe -m {app}\"",
-	KillCommand:   "kill {app}",
-	CodePrompt:    "You are a programming assistant. Use the provided tools to complete the tasks.",
+	BuildCommand: "build {app}",
+	RunCommand:   "{app}",
+	KillCommand:  "kill {app}",
+	CodePrompt:    "You are a programmer who likes to get the program working with minimal chatter! Remember you have a rolling window of [qa] prompt/replies, so make good use of your 'note' tool to persist technical data and memory so you don't forget what you are doing! There's also a user made checklist in the 'todo' tool that explains what needs to be done. The automation loop continues as long as you keep calling tools. Use the following tool commands to complete your objective.\nhelp: (lists all tools available)\nhelp: toolname (lists the tool json description)\n[tools]",
 	AllowedTools:  []string{},
 }
 

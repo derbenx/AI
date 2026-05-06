@@ -138,7 +138,7 @@ button:hover {
     font-size: 12px;
 }
 
-#settings-tab, #server-tab, #code-tab, #code-setup-tab {
+#settings-tab, #server-tab, #code-tab, #code-setup-tab, #tools-tab {
     flex-direction: column;
     padding: 20px;
     overflow-y: auto;

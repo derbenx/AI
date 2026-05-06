@@ -65,3 +65,11 @@ export function ListAvailableTools() {
 export function SendCodeMessage(arg1) {
   return window['go']['main']['App']['SendCodeMessage'](arg1);
 }
+
+export function UpdateTodoList(arg1) {
+  return window['go']['main']['App']['UpdateTodoList'](arg1);
+}
+
+export function SetCodeActive(arg1) {
+  return window['go']['main']['App']['SetCodeActive'](arg1);
+}

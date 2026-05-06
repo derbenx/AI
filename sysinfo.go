@@ -14,11 +14,13 @@ type SystemSpecs struct {
 	GPU         string `json:"gpu"`
 	OS          string `json:"os"`
 	BalancedGPU int    `json:"balanced_gpu"` // Recommended GPU layers
+	IsAdmin     bool   `json:"is_admin"`
 }
 
 func GetSystemSpecs() (SystemSpecs, error) {
 	specs := SystemSpecs{
-		OS: runtime.GOOS,
+		OS:      runtime.GOOS,
+		IsAdmin: isAdmin(),
 	}
 
 	if runtime.GOOS == "windows" {

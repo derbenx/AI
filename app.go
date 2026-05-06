@@ -21,6 +21,8 @@ type App struct {
 	server       *LLMServer
 	isStarting   bool
 	interactions []Interaction
+	todoList     string
+	isCodeActive bool
 }
 
 // NewApp creates a new App application struct
@@ -57,12 +59,25 @@ func (a *App) CheckServerExecutable() bool {
 	return true
 }
 
+func (a *App) getExecDir() string {
+	ex, err := os.Executable()
+	if err != nil {
+		return "."
+	}
+	return filepath.Dir(ex)
+}
+
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.config = LoadConfig()
 
+	baseDir := a.getExecDir()
+
 	// Ensure directories exist
-	os.MkdirAll(filepath.Join("build", "bin", "tools"), 0755)
+	os.MkdirAll(filepath.Join(baseDir, "gguf"), 0755)
+	os.MkdirAll(filepath.Join(baseDir, "clip"), 0755)
+	os.MkdirAll(filepath.Join(baseDir, "llama"), 0755)
+	os.MkdirAll(filepath.Join(baseDir, "tools"), 0755)
 
 	// Handle file drops
 	wailsruntime.OnFileDrop(a.ctx, func(x, y int, paths []string) {
@@ -168,4 +183,19 @@ func (a *App) GetFileContent(path string) (string, error) {
 		return "", err
 	}
 	return string(data), nil
+}
+
+func (a *App) GetTodoList() string {
+	wailsruntime.EventsEmit(a.ctx, "request-todo")
+	// Wails EventsEmit doesn't return values directly from frontend.
+	// We need a different approach. Let's use a simple state in the App struct.
+	return a.todoList
+}
+
+func (a *App) UpdateTodoList(todo string) {
+	a.todoList = todo
+}
+
+func (a *App) SetCodeActive(active bool) {
+	a.isCodeActive = active
 }

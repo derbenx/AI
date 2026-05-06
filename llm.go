@@ -218,6 +218,9 @@ func (a *App) SendCodeMessage(text string) error {
 }
 
 func (a *App) processMessage(text string, imagePath string, isCodeMode bool) error {
+	if isCodeMode && !a.isCodeActive {
+		return nil // Task cancelled
+	}
 	if a.server == nil && a.isLocalServer() {
 		return fmt.Errorf("Server not running. Please start a llama_server from the Server tab.")
 	}
@@ -248,7 +251,7 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 		// Use Code Prompt as System Prompt to ensure persistence
 		systemPrompt = a.config.CodePrompt
 		systemPrompt = strings.ReplaceAll(systemPrompt, "[qa]", fmt.Sprintf("%d", a.config.MemoryLimit))
-		systemPrompt = strings.ReplaceAll(systemPrompt, "[tools]", a.toolHelp())
+		systemPrompt = strings.ReplaceAll(systemPrompt, "[tools]", a.toolHelp(""))
 	}
 
 	messages := []Message{
@@ -302,7 +305,7 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 	wailsruntime.EventsEmit(a.ctx, "done", fullResponse)
 
 	// If in code mode, check for tool calls
-	if isCodeMode {
+	if isCodeMode && a.isCodeActive {
 		a.handleToolCalls(fullResponse)
 	}
 
@@ -330,7 +333,9 @@ func (a *App) handleToolCalls(response string) {
 			// Automatically send output back to AI
 			go func() {
 				time.Sleep(500 * time.Millisecond)
-				a.processMessage(fmt.Sprintf("Tool output for '%s':\n%s", cmd, output), "", true)
+				if a.isCodeActive {
+					a.processMessage(fmt.Sprintf("Tool output for '%s':\n%s", cmd, output), "", true)
+				}
 			}()
 			return // Handle one command at a time to keep it sequential
 		}
