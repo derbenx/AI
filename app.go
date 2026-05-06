@@ -22,6 +22,7 @@ type App struct {
 	isStarting   bool
 	interactions []Interaction
 	todoList     string
+	aiNotes      string
 	isCodeActive bool
 }
 
@@ -70,6 +71,9 @@ func (a *App) getExecDir() string {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	a.config = LoadConfig()
+
+	a.todoList = a.config.TodoList
+	a.aiNotes = a.config.AINotes
 
 	baseDir := a.getExecDir()
 
@@ -194,6 +198,18 @@ func (a *App) GetTodoList() string {
 
 func (a *App) UpdateTodoList(todo string) {
 	a.todoList = todo
+	a.config.TodoList = todo
+	SaveConfig(a.config)
+}
+
+func (a *App) GetAINotes() string {
+	return a.aiNotes
+}
+
+func (a *App) UpdateAINotes(notes string) {
+	a.aiNotes = notes
+	a.config.AINotes = notes
+	SaveConfig(a.config)
 }
 
 func (a *App) SetCodeActive(active bool) {

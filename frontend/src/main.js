@@ -1,4 +1,4 @@
-import {GetSpecs, GetConfig, SaveSettings, ListModels, ListClips, GetBalancedLayers, SendMessage, ClearHistory, CheckServerExecutable, StartServer, StopServer, IsServerRunning, GetImageBase64, GetFileContent, ListAvailableTools, SendCodeMessage, UpdateTodoList, SetCodeActive} from '../wailsjs/go/main/App';
+import {GetSpecs, GetConfig, SaveSettings, ListModels, ListClips, GetBalancedLayers, SendMessage, ClearHistory, CheckServerExecutable, StartServer, StopServer, IsServerRunning, GetImageBase64, GetFileContent, ListAvailableTools, SendCodeMessage, UpdateTodoList, SetCodeActive, GetAINotes, UpdateAINotes} from '../wailsjs/go/main/App';
 import {EventsOn, BrowserOpenURL} from '../wailsjs/runtime/runtime';
 
 let currentImagePath = "";
@@ -126,10 +126,8 @@ EventsOn('code-finished', (msg) => {
     stopCodeMode();
 });
 
-EventsOn('ai-note', (note) => {
-    const aiNotesArea = document.getElementById('ai-notes');
-    aiNotesArea.value += note + "\n---\n";
-    aiNotesArea.scrollTop = aiNotesArea.scrollHeight;
+EventsOn('notes-updated', (notes) => {
+    document.getElementById('ai-notes').value = notes;
 });
 
 EventsOn('todo-updated', (todo) => {
@@ -252,12 +250,19 @@ async function initCodeSetup() {
     document.getElementById('run-command').value = config.run_command || "{app}";
     document.getElementById('kill-command').value = config.kill_command || "kill {app}";
     document.getElementById('code-prompt').value = config.code_prompt || "";
+    document.getElementById('todo-list').value = config.todo_list || "";
+    document.getElementById('ai-notes').value = config.ai_notes || "";
 
     await refreshTools();
 
     const todoInput = document.getElementById('todo-list');
     todoInput.oninput = async () => {
         await UpdateTodoList(todoInput.value);
+    };
+
+    const notesInput = document.getElementById('ai-notes');
+    notesInput.oninput = async () => {
+        await UpdateAINotes(notesInput.value);
     };
 }
 

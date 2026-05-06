@@ -314,17 +314,21 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 
 func (a *App) handleToolCalls(response string) {
 	lines := strings.Split(response, "\n")
+	foundCommand := false
+
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line == "done:" || line == "command: done:" {
-			wailsruntime.EventsEmit(a.ctx, "code-finished", "AI has completed the task.")
-			return
-		}
 
 		// Look for command: tool args
 		if strings.HasPrefix(line, "command:") {
+			foundCommand = true
 			cmd := strings.TrimPrefix(line, "command:")
 			cmd = strings.TrimSpace(cmd)
+
+			if cmd == "done:" {
+				wailsruntime.EventsEmit(a.ctx, "code-finished", "AI has completed the task.")
+				return
+			}
 
 			wailsruntime.EventsEmit(a.ctx, "tool-executing", cmd)
 			output := a.ExecuteTool(cmd)
@@ -339,5 +343,11 @@ func (a *App) handleToolCalls(response string) {
 			}()
 			return // Handle one command at a time to keep it sequential
 		}
+	}
+
+	if !foundCommand {
+		// If no command found, the AI might be done or just chatting.
+		// We signal completion to break the loop.
+		wailsruntime.EventsEmit(a.ctx, "code-finished", "AI finished responding without a tool call.")
 	}
 }

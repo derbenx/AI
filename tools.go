@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -72,12 +74,18 @@ func (a *App) ListAvailableTools() ([]ToolInfo, error) {
 }
 
 func (a *App) ExecuteTool(command string) string {
-	command = strings.TrimPrefix(command, ":")
-	parts := strings.SplitN(command, " ", 2)
-	tool := strings.TrimSuffix(parts[0], ":")
-	args := ""
-	if len(parts) > 1 {
-		args = parts[1]
+	command = strings.TrimSpace(strings.TrimPrefix(command, ":"))
+
+	var tool, args string
+	if colonIdx := strings.Index(command, ":"); colonIdx != -1 {
+		tool = strings.TrimSpace(command[:colonIdx])
+		args = strings.TrimSpace(command[colonIdx+1:])
+	} else {
+		parts := strings.SplitN(command, " ", 2)
+		tool = parts[0]
+		if len(parts) > 1 {
+			args = parts[1]
+		}
 	}
 
 	// Check if tool is allowed
@@ -97,17 +105,23 @@ func (a *App) ExecuteTool(command string) string {
 	case "note":
 		return a.toolNote(args)
 	case "todo":
-		return a.toolTodo()
-	case "update_todo":
-		return a.toolUpdateTodo(args)
+		return a.toolTodo(args)
 	case "url":
 		return a.toolURL(args, false)
 	case "urltxt":
 		return a.toolURL(args, true)
+	case "build":
+		return a.toolBuild()
 	case "run":
-		return a.toolRun(args)
+		return a.toolRun()
 	case "kill":
 		return a.toolKill()
+	case "lines":
+		return a.toolLines(args)
+	case "fcopy":
+		return a.toolFCopy(args)
+	case "mkdir":
+		return a.toolMkdir(args)
 	case "help":
 		return a.toolHelp(args)
 	default:
@@ -128,7 +142,12 @@ func (a *App) securePath(path string) (string, error) {
 	return fullPath, nil
 }
 
-func (a *App) toolFRead(path string) string {
+func (a *App) toolFRead(args string) string {
+	parts := a.splitArgs(args)
+	if len(parts) == 0 {
+		return "Error: fread requires a file path."
+	}
+	path := parts[0]
 	fullPath, err := a.securePath(path)
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
@@ -138,8 +157,78 @@ func (a *App) toolFRead(path string) string {
 		return fmt.Sprintf("Error: %v", err)
 	}
 
-	if info.Size() > 2*1024*1024 {
+	operation := ""
+	count := 0
+	if len(parts) > 2 {
+		operation = strings.ToLower(parts[1])
+		count, _ = strconv.Atoi(parts[2])
+	}
+
+	if info.Size() > 2*1024*1024 && operation == "" {
 		return fmt.Sprintf("This file is %.2fMB, use head or tail.", float64(info.Size())/(1024*1024))
+	}
+
+	if operation == "head" || operation == "tail" {
+		if count <= 0 {
+			count = 50 // Default
+		}
+		file, err := os.Open(fullPath)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		defer file.Close()
+
+		var result []string
+		if operation == "head" {
+			scanner := bufio.NewScanner(file)
+			for i := 0; i < count && scanner.Scan(); i++ {
+				result = append(result, scanner.Text())
+			}
+		} else {
+			// Efficient tail for large files
+			stat, _ := file.Stat()
+			size := stat.Size()
+			bufSize := int64(64 * 1024) // 64KB buffer
+			if bufSize > size {
+				bufSize = size
+			}
+
+			foundLines := 0
+			pos := size
+			var finalLines []string
+
+			for pos > 0 && foundLines <= count {
+				readSize := bufSize
+				if pos < bufSize {
+					readSize = pos
+				}
+				pos -= readSize
+				file.Seek(pos, 0)
+				buf := make([]byte, readSize)
+				file.Read(buf)
+
+				text := string(buf)
+				lines := strings.Split(text, "\n")
+
+				for i := len(lines) - 1; i >= 0; i-- {
+					// Skip the very last newline if it's the end of file
+					if pos+readSize == size && i == len(lines)-1 && lines[i] == "" {
+						continue
+					}
+
+					finalLines = append([]string{lines[i]}, finalLines...)
+					foundLines++
+					if foundLines > count {
+						break
+					}
+				}
+			}
+			if len(finalLines) > count {
+				finalLines = finalLines[len(finalLines)-count:]
+			}
+			return strings.Join(finalLines, "\n")
+		}
+		return strings.Join(result, "\n")
 	}
 
 	content, err := os.ReadFile(fullPath)
@@ -179,25 +268,32 @@ func (a *App) splitArgs(args string) []string {
 
 func (a *App) toolFWrite(args string) string {
 	parts := a.splitArgs(args)
-	if len(parts) < 2 {
-		return "Error: fwrite requires <path> <content>. Use quotes if path has spaces."
+	if len(parts) < 3 {
+		return "Error: fwrite requires <path> <operation: write|append> <content>. Use quotes if path has spaces."
 	}
 	path := parts[0]
-	content := strings.Join(parts[1:], " ")
-	// If the user used quotes for content, it might be better to use the original string slice from first space
-	if firstSpace := strings.Index(args, " "); firstSpace != -1 {
-		// Attempt to extract content more accurately
-		remaining := strings.TrimSpace(args[firstSpace:])
-		if strings.HasPrefix(remaining, path) {
-			// path was likely quoted, find where it ends
-			pathEnd := strings.Index(args, path) + len(path)
-			if strings.HasPrefix(args[pathEnd:], "\"") || strings.HasPrefix(args[pathEnd:], "'") {
-				pathEnd++
-			}
-			content = strings.TrimSpace(args[pathEnd:])
-		} else {
-			content = remaining
+	operation := strings.ToLower(parts[1])
+
+	// More robust content extraction: find where the operation ends in the original string
+	// We look for the operation word that is NOT inside the quoted path
+	content := ""
+	opIndex := -1
+
+	// If path was quoted, it will be parts[0]. Find its end in args.
+	searchStart := 0
+	if strings.Contains(args, path) {
+		searchStart = strings.Index(args, path) + len(path)
+		if searchStart < len(args) && (args[searchStart] == '"' || args[searchStart] == '\'') {
+			searchStart++
 		}
+	}
+
+	opIndex = strings.Index(strings.ToLower(args[searchStart:]), operation)
+	if opIndex != -1 {
+		opEnd := searchStart + opIndex + len(operation)
+		content = strings.TrimLeft(args[opEnd:], " ")
+	} else {
+		content = strings.Join(parts[2:], " ")
 	}
 
 	fullPath, err := a.securePath(path)
@@ -209,6 +305,18 @@ func (a *App) toolFWrite(args string) string {
 	err = os.MkdirAll(filepath.Dir(fullPath), 0755)
 	if err != nil {
 		return fmt.Sprintf("Error creating directories: %v", err)
+	}
+
+	if operation == "append" {
+		f, err := os.OpenFile(fullPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		defer f.Close()
+		if _, err := f.WriteString(content); err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		return fmt.Sprintf("File '%s' appended successfully.", path)
 	}
 
 	err = os.WriteFile(fullPath, []byte(content), 0644)
@@ -277,22 +385,131 @@ func (a *App) toolLS(path string) string {
 	return sb.String()
 }
 
-func (a *App) toolNote(note string) string {
-	wailsruntime.EventsEmit(a.ctx, "ai-note", note)
-	return "Note saved."
+func (a *App) toolNote(args string) string {
+	parts := a.splitArgs(args)
+	content := a.GetAINotes()
+	lines := strings.Split(content, "\n")
+
+	if len(parts) == 0 || parts[0] == "0" {
+		return content
+	}
+
+	id, err := strconv.Atoi(parts[0])
+	if err != nil || id < 1 || id > len(lines)+1 {
+		return fmt.Sprintf("Error: Invalid note ID. List has %d lines.", len(lines))
+	}
+
+	if len(parts) > 1 {
+		newNote := strings.Join(parts[1:], " ")
+		if id <= len(lines) {
+			lines[id-1] = newNote
+		} else {
+			lines = append(lines, newNote)
+		}
+		newContent := strings.Join(lines, "\n")
+		a.UpdateAINotes(newContent)
+		wailsruntime.EventsEmit(a.ctx, "notes-updated", newContent)
+		return fmt.Sprintf("Note %d updated.", id)
+	}
+
+	if id > len(lines) {
+		return "Error: Note ID does not exist."
+	}
+	return fmt.Sprintf("Note %d: %s", id, lines[id-1])
 }
 
-func (a *App) toolTodo() string {
-	// We need a way to get the todo from UI.
-	// For now we'll request it via event or just return a placeholder
-	// if we haven't implemented GetTodoList yet.
-	return a.GetTodoList()
+func (a *App) toolLines(path string) string {
+	fullPath, err := a.securePath(path)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+
+	file, err := os.Open(fullPath)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	count := 0
+	for scanner.Scan() {
+		count++
+	}
+	return fmt.Sprintf("%d", count)
 }
 
-func (a *App) toolUpdateTodo(todo string) string {
-	a.UpdateTodoList(todo)
-	wailsruntime.EventsEmit(a.ctx, "todo-updated", todo)
-	return "Todo list updated."
+func (a *App) toolFCopy(args string) string {
+	parts := a.splitArgs(args)
+	if len(parts) < 2 {
+		return "Error: fcopy requires <src> <dst>"
+	}
+	src, err := a.securePath(parts[0])
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	dst, err := a.securePath(parts[1])
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+
+	s, err := os.Open(src)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	defer s.Close()
+
+	d, err := os.Create(dst)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	defer d.Close()
+
+	_, err = io.Copy(d, s)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	return fmt.Sprintf("Copied '%s' to '%s'.", parts[0], parts[1])
+}
+
+func (a *App) toolMkdir(path string) string {
+	fullPath, err := a.securePath(path)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+
+	err = os.MkdirAll(fullPath, 0755)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+	return fmt.Sprintf("Directory '%s' created.", path)
+}
+
+func (a *App) toolTodo(args string) string {
+	parts := a.splitArgs(args)
+	content := a.GetTodoList()
+	lines := strings.Split(content, "\n")
+
+	if len(parts) == 0 || parts[0] == "0" {
+		return content
+	}
+
+	id, err := strconv.Atoi(parts[0])
+	if err != nil || id < 1 || id > len(lines) {
+		return fmt.Sprintf("Error: Invalid line ID. List has %d lines.", len(lines))
+	}
+
+	if len(parts) > 1 {
+		action := strings.ToLower(parts[1])
+		if action == "started" || action == "done" {
+			lines[id-1] = strings.TrimSpace(lines[id-1]) + " [" + action + "]"
+			newContent := strings.Join(lines, "\n")
+			a.UpdateTodoList(newContent)
+			wailsruntime.EventsEmit(a.ctx, "todo-updated", newContent)
+			return fmt.Sprintf("Task %d marked as %s.", id, action)
+		}
+	}
+
+	return fmt.Sprintf("Line %d: %s", id, lines[id-1])
 }
 
 func (a *App) backupFile(fullPath string) {
@@ -307,8 +524,19 @@ func (a *App) backupFile(fullPath string) {
 	fileName := filepath.Base(fullPath)
 	backupPath := filepath.Join(trashDir, fmt.Sprintf("%s.%s", fileName, timestamp))
 
-	input, _ := os.ReadFile(fullPath)
-	os.WriteFile(backupPath, input, 0644)
+	src, err := os.Open(fullPath)
+	if err != nil {
+		return
+	}
+	defer src.Close()
+
+	dst, err := os.Create(backupPath)
+	if err != nil {
+		return
+	}
+	defer dst.Close()
+
+	io.Copy(dst, src)
 }
 
 func (a *App) toolURL(url string, textOnly bool) string {
@@ -390,23 +618,11 @@ func (a *App) toolURL(url string, textOnly bool) string {
 
 var currentProcess *exec.Cmd
 
-func (a *App) toolRun(args string) string {
-	if currentProcess != nil && currentProcess.Process != nil {
-		return "Error: A process is already running. Kill it first."
-	}
-
-	cmdStr := a.config.RunCommand
-	if args != "" {
-		cmdStr = args
-	}
-
-	// Replace placeholders
-	cmdStr = strings.ReplaceAll(cmdStr, "{app}", a.config.AppName)
+func (a *App) toolBuild() string {
+	cmdStr := strings.ReplaceAll(a.config.BuildCommand, "{app}", a.config.AppName)
 
 	var cmd *exec.Cmd
 	if runtime.GOOS == "windows" {
-		// This is a simplification. Real runas with password requires more effort.
-		// For now we just execute the command.
 		cmd = exec.Command("cmd", "/c", cmdStr)
 	} else {
 		cmd = exec.Command("sh", "-c", cmdStr)
@@ -415,24 +631,69 @@ func (a *App) toolRun(args string) string {
 	cmd.Dir = a.config.ProjectFolder
 	cmd.SysProcAttr = getSysProcAttr()
 
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err := cmd.Start()
+	logPath := filepath.Join(a.config.ProjectFolder, "build.log")
+	logFile, err := os.Create(logPath)
 	if err != nil {
+		return fmt.Sprintf("Error creating build.log: %v", err)
+	}
+	defer logFile.Close()
+
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+
+	err = cmd.Run()
+	if err != nil {
+		return fmt.Sprintf("Build failed: %v. Look at 'build.log' for errors.", err)
+	}
+
+	return "Done, look at 'build.log' for errors."
+}
+
+func (a *App) toolRun() string {
+	if currentProcess != nil && currentProcess.Process != nil {
+		return "Error: A process is already running. Kill it first."
+	}
+
+	cmdStr := strings.ReplaceAll(a.config.RunCommand, "{app}", a.config.AppName)
+
+	var cmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		cmd = exec.Command("cmd", "/c", cmdStr)
+	} else {
+		cmd = exec.Command("sh", "-c", cmdStr)
+	}
+
+	cmd.Dir = a.config.ProjectFolder
+	cmd.SysProcAttr = getSysProcAttr()
+
+	logPath := filepath.Join(a.config.ProjectFolder, "run.log")
+	logFile, err := os.Create(logPath)
+	if err != nil {
+		return fmt.Sprintf("Error creating run.log: %v", err)
+	}
+	// Note: We don't close logFile here because cmd.Start uses it in background
+
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+
+	err = cmd.Start()
+	if err != nil {
+		logFile.Close()
 		return fmt.Sprintf("Error starting process: %v", err)
 	}
 
 	currentProcess = cmd
 
 	go func() {
-		// Stream output to chat if needed? The requirement says "messages/prompts/tool replies still scroll in chat"
-		// For now just wait and clear currentProcess
+		defer logFile.Close()
 		cmd.Wait()
 		currentProcess = nil
 	}()
 
-	return fmt.Sprintf("Started: %s", cmdStr)
+	// Wait a few seconds to collect initial data
+	time.Sleep(3 * time.Second)
+
+	return "Done, look at 'run.log' for errors."
 }
 
 func (a *App) toolKill() string {
@@ -483,19 +744,21 @@ func (a *App) toolDynamic(tool, args string) string {
 
 func (a *App) getBuiltInTools() map[string]string {
 	return map[string]string{
-		"fread":  `{"name": "fread", "description": "Read the content of a file.", "usage": "fread <path>", "parameters": {"path": "Relative path to the file."}}`,
-		"fwrite": `{"name": "fwrite", "description": "Write content to a file. Overwrites if exists (with backup).", "usage": "fwrite <path> <content>", "parameters": {"path": "Relative path to the file.", "content": "The text content to write."}}`,
-		"rm":     `{"name": "rm", "description": "Remove a file (with backup to !trash).", "usage": "rm <path>", "parameters": {"path": "Relative path to the file."}}`,
-		"ls":     `{"name": "ls", "description": "List files and directories in a path or using a glob pattern.", "usage": "ls [path_or_pattern]", "parameters": {"path_or_pattern": "Relative path or glob pattern (e.g., *.go)."}}`,
-		"note":   `{"name": "note", "description": "Persist technical data or memory to the UI notes list.", "usage": "note <text>", "parameters": {"text": "The information to persist."}}`,
-		"todo":        `{"name": "todo", "description": "Read the current user checklist.", "usage": "todo", "parameters": {}}`,
-		"update_todo": `{"name": "update_todo", "description": "Update the user todo checklist in the UI.", "usage": "update_todo <new_todo_content>", "parameters": {"new_todo_content": "The full new content for the todo list."}}`,
-		"url":    `{"name": "url", "description": "Download a URL to a file in the !url folder.", "usage": "url <url>", "parameters": {"url": "The full URL to download."}}`,
-		"urltxt": `{"name": "urltxt", "description": "Download a URL and extract text to a file in the !url folder.", "usage": "urltxt <url>", "parameters": {"url": "The full URL to process."}}`,
-		"run":    `{"name": "run", "description": "Execute the build/run command defined in settings.", "usage": "run [args]", "parameters": {"args": "Optional additional arguments."}}`,
-		"kill":   `{"name": "kill", "description": "Terminate the running process.", "usage": "kill", "parameters": {}}`,
-		"help":   `{"name": "help", "description": "List available tools or get detailed info for one tool.", "usage": "help [toolname]", "parameters": {"toolname": "Optional tool name to get info for."}}`,
-		"done:":  `{"name": "done:", "description": "Signal that the task is complete.", "usage": "done:", "parameters": {}}`,
+		"fread":  `{"tool_name": "fread", "description": "Reads file content. If the file is large, the system will reject a full read; use 'head' or 'tail' to retrieve specific segments.", "parameters": {"type": "object", "properties": {"file_path": {"type": "string", "description": "Relative path to the file (e.g., 'main.go' or 'logs/build.log')."}, "operation": {"type": "string", "enum": ["tail", "head"], "description": "Optional: Read from the top (head) or bottom (tail) of the file."}, "count": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Number of lines to read when using head or tail."}}, "required": ["file_path"]}}`,
+		"fwrite": `{"tool_name": "fwrite", "description": "Modifies or overwrites the content of a specified file", "parameters": {"type": "object", "properties": {"file_path": {"type": "string", "description": "The relative path to the file to be modified (e.g., 'src/main.py')."}, "operation": {"type": "string", "enum": ["write", "append"], "description": "The action to perform on the file. write replaces, append adds to the end."}, "content": {"type": "string", "description": "The new content that should be written to the file."}}, "required": ["file_path", "operation", "content"]}}`,
+		"rm":     `{"tool_name": "rm", "description": "Remove a file (with backup to !trash).", "usage": "rm <path>", "parameters": {"path": "Relative path to the file."}}`,
+		"ls":     `{"tool_name": "ls", "description": "List files and directories in a path or using a glob pattern.", "usage": "ls [path_or_pattern]", "parameters": {"path_or_pattern": "Relative path or glob pattern (e.g., *.go)."}}`,
+		"lines":  `{"tool_name": "lines", "description": "Count the number of lines in a file.", "usage": "lines <path>", "parameters": {"path": "Relative path to the file."}}`,
+		"fcopy":  `{"tool_name": "fcopy", "description": "Copy or rename a file.", "usage": "fcopy <src> <dst>", "parameters": {"src": "Source path.", "dst": "Destination path."}}`,
+		"mkdir":  `{"tool_name": "mkdir", "description": "Create a new directory.", "usage": "mkdir <path>", "parameters": {"path": "Path to create."}}`,
+		"note":   `{"tool_name": "note", "description": "Writes or retrieves persistent technical notes to assist with AI long-term memory.", "parameters": {"type": "object", "properties": {"id": {"type": "integer", "description": "The line number for the note. 0 is used to read the entire list."}, "content": {"type": "string", "description": "The text to be saved, required only for 'write' action."}}, "required": ["id"]}}`,
+		"todo":   `{"tool_name": "todo", "description": "Manages the users project checklist to track progress and prevent task drift.", "parameters": {"type": "object", "properties": {"id": {"type": "integer", "description": "The specific line number to use. Use 0 to read the entire list."}, "action": {"type": "string", "enum": ["started", "done"], "description": "started and done append that word to the line like a checklist."}}, "required": ["id"]}}`,
+		"url":    `{"tool_name": "url", "description": "Download a URL to a file in the !url folder.", "usage": "url <url>", "parameters": {"url": "The full URL to download."}}`,
+		"urltxt": `{"tool_name": "urltxt", "description": "Download a URL and extract text to a file in the !url folder.", "usage": "urltxt <url>", "parameters": {"url": "The full URL to process."}}`,
+		"build":  `{"tool_name": "build", "description": "Execute the build command defined in settings. Captures output to build.log.", "usage": "build", "parameters": {}}`,
+		"run":    `{"tool_name": "run", "description": "Execute the run command defined in settings. Captures output to run.log and waits 3 seconds.", "usage": "run", "parameters": {}}`,
+		"kill":   `{"tool_name": "kill", "description": "Terminate the running process using the kill command defined in settings.", "usage": "kill", "parameters": {}}`,
+		"help":   `{"tool_name": "help", "description": "List available tools or get detailed info for one tool.", "usage": "help [toolname]", "parameters": {"toolname": "Optional tool name to get info for."}}`,
 	}
 }
 

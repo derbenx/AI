@@ -25,7 +25,14 @@ func isAdmin() bool {
 		return false
 	}
 	defer windows.FreeSid(sid)
-	token := windows.Token(0)
+
+	var token windows.Token
+	err = windows.OpenCurrentProcessToken(windows.TOKEN_QUERY, &token)
+	if err != nil {
+		return false
+	}
+	defer token.Close()
+
 	member, err := token.IsMember(sid)
 	if err != nil {
 		return false

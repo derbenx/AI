@@ -24,6 +24,8 @@ type Config struct {
 	AppName      string   `json:"app_name"`
 	CodePrompt   string   `json:"code_prompt"`
 	AllowedTools []string `json:"allowed_tools"`
+	TodoList     string   `json:"todo_list"`
+	AINotes      string   `json:"ai_notes"`
 }
 
 var defaultConfig = Config{
@@ -37,7 +39,7 @@ var defaultConfig = Config{
 	BuildCommand: "build {app}",
 	RunCommand:   "{app}",
 	KillCommand:  "kill {app}",
-	CodePrompt:    "You are a programmer who likes to get the program working with minimal chatter! Remember you have a rolling window of [qa] prompt/replies, so make good use of your 'note' tool to persist technical data and memory so you don't forget what you are doing! There's also a user made checklist in the 'todo' tool that explains what needs to be done. The automation loop continues as long as you keep calling tools. Use the following tool commands to complete your objective.\nhelp: (lists all tools available)\nhelp: toolname (lists the tool json description)\n[tools]",
+	CodePrompt:    "You are a programmer who likes to get the program working with minimal chatter! Remember you have a rolling window of [qa] prompt/replies, so make good use of your 'note' tool to persist technical data and memory so you don't forget what you are doing! There's also a user made checklist in the 'todo' tool that explains what needs to be done. The automation loop continues as long as you keep calling tools. Use the following tool commands (prefixed with 'command:') to complete your objective.\nExample: command: ls: .\nhelp: (lists all tools available)\nhelp: toolname (lists the tool json description)\n[tools]",
 	AllowedTools:  []string{},
 }
 

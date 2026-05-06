@@ -73,3 +73,11 @@ export function UpdateTodoList(arg1) {
 export function SetCodeActive(arg1) {
   return window['go']['main']['App']['SetCodeActive'](arg1);
 }
+
+export function GetAINotes() {
+  return window['go']['main']['App']['GetAINotes']();
+}
+
+export function UpdateAINotes(arg1) {
+  return window['go']['main']['App']['UpdateAINotes'](arg1);
+}
