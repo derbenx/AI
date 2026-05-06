@@ -87,6 +87,7 @@ func (a *App) StartServer() error {
 		"--port", "8080",
 		"-ngl", fmt.Sprintf("%d", a.config.GPULayers),
 		"--host", "127.0.0.1",
+		"--jinja",
 	}
 
 	if a.config.ClipPath != "" {
