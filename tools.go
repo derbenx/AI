@@ -87,8 +87,23 @@ func (a *App) ExecuteTool(command string) string {
 	}
 }
 
-func (a *App) toolFRead(path string) string {
+func (a *App) securePath(path string) (string, error) {
 	fullPath := filepath.Join(a.config.ProjectFolder, path)
+	rel, err := filepath.Rel(a.config.ProjectFolder, fullPath)
+	if err != nil {
+		return "", err
+	}
+	if strings.HasPrefix(rel, "..") || filepath.IsAbs(rel) {
+		return "", fmt.Errorf("access denied: path must be within project folder")
+	}
+	return fullPath, nil
+}
+
+func (a *App) toolFRead(path string) string {
+	fullPath, err := a.securePath(path)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
 	info, err := os.Stat(fullPath)
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
@@ -113,10 +128,13 @@ func (a *App) toolFWrite(args string) string {
 	path := parts[0]
 	content := parts[1]
 
-	fullPath := filepath.Join(a.config.ProjectFolder, path)
+	fullPath, err := a.securePath(path)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
 	a.backupFile(fullPath)
 
-	err := os.MkdirAll(filepath.Dir(fullPath), 0755)
+	err = os.MkdirAll(filepath.Dir(fullPath), 0755)
 	if err != nil {
 		return fmt.Sprintf("Error creating directories: %v", err)
 	}
@@ -129,10 +147,13 @@ func (a *App) toolFWrite(args string) string {
 }
 
 func (a *App) toolRM(path string) string {
-	fullPath := filepath.Join(a.config.ProjectFolder, path)
+	fullPath, err := a.securePath(path)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
 	a.backupFile(fullPath)
 
-	err := os.Remove(fullPath)
+	err = os.Remove(fullPath)
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}
@@ -140,7 +161,33 @@ func (a *App) toolRM(path string) string {
 }
 
 func (a *App) toolLS(path string) string {
-	fullPath := filepath.Join(a.config.ProjectFolder, path)
+	fullPath, err := a.securePath(path)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+
+	// Support patterns if path contains *
+	if strings.Contains(path, "*") || strings.Contains(path, "?") {
+		matches, err := filepath.Glob(fullPath)
+		if err != nil {
+			return fmt.Sprintf("Error: %v", err)
+		}
+		if len(matches) == 0 {
+			return "No matches found."
+		}
+		var sb strings.Builder
+		for _, match := range matches {
+			info, _ := os.Stat(match)
+			rel, _ := filepath.Rel(a.config.ProjectFolder, match)
+			if info.IsDir() {
+				sb.WriteString(fmt.Sprintf("[DIR]  %s\n", rel))
+			} else {
+				sb.WriteString(fmt.Sprintf("%-6d %s\n", info.Size(), rel))
+			}
+		}
+		return sb.String()
+	}
+
 	files, err := os.ReadDir(fullPath)
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
