@@ -138,6 +138,10 @@ EventsOn('todo-updated', (todo) => {
     document.getElementById('todo-list').value = todo;
 });
 
+EventsOn('internal-user-message', (msg) => {
+    appendMessage('user', msg);
+});
+
 EventsOn('server-log', (log) => {
     const logArea = document.getElementById('server-log');
     logArea.value += log + "\n";

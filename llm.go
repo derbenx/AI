@@ -252,11 +252,17 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 		systemPrompt = a.config.CodePrompt
 		systemPrompt = strings.ReplaceAll(systemPrompt, "[qa]", fmt.Sprintf("%d", a.config.MemoryLimit))
 		systemPrompt = strings.ReplaceAll(systemPrompt, "[tools]", a.toolHelp(""))
-		wailsruntime.EventsEmit(a.ctx, "system-prompt-display", systemPrompt)
+		// Only emit once at the very start of a session
+		if !strings.Contains(text, "Tool output for") {
+			wailsruntime.EventsEmit(a.ctx, "system-prompt-display", systemPrompt)
+		}
 	}
 
 	a.logChat("system", systemPrompt)
 	a.logChat("user", text)
+	if isCodeMode && strings.Contains(text, "Tool output for") {
+		wailsruntime.EventsEmit(a.ctx, "internal-user-message", text)
+	}
 
 	messages := []Message{
 		{Role: "system", Content: systemPrompt},

@@ -243,8 +243,18 @@ func (a *App) splitArgs(args string) []string {
 	var current strings.Builder
 	inQuotes := false
 	quoteChar := rune(0)
+	escaped := false
 
 	for _, r := range args {
+		if escaped {
+			current.WriteRune(r)
+			escaped = false
+			continue
+		}
+		if r == '\\' {
+			escaped = true
+			continue
+		}
 		if (r == '"' || r == '\'') && !inQuotes {
 			inQuotes = true
 			quoteChar = r
