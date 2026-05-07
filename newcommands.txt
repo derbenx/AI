@@ -1,0 +1,66 @@
+help command, lists info about other tools/commands.
+ Usage; help: [tool]
+ Example; help: (lists all tool names)
+ Example; help: note (describes how to use note)
+
+note command, reads a persistent technical note.
+ Usage; note: [1-999] {note}
+ Example; note: 0 (Read all notes)
+ Example; note: 1 (Read note #1)
+ Example; note: 2 I'd rather be at the beach (saves note to slot #2)
+
+todo command, Manages a user made to-do list as a checklist
+ Usage; todo: [1-999] {done/reset}
+ Example; todo: 0 (shows entire list)
+ Example; todo: 1 (shows task #1)
+ Example; todo: 2 done (appends [done] to the end of line #2)
+ Example; todo: 3 reset (removes [done] from the end of line #3)
+ 
+lines command, number of lines in a file. Relative path only.
+ Usage; lines: [file]
+ Example; lines: url/web.htm
+ 
+rm command, remove/delete a file. Relative path only.
+ Usage; rm: [file]
+ 
+ls command, list files in specified folder. Relative path only.
+ Usage; rm: [file]
+ 
+fread command: Reads a file on disk. Relative path only.
+ Usage; fread: [head/tail] [lines/bytes/all] [file]
+ Example; fread: head 10 pop.go (Reads the top 10 lines of the file).
+ Example; fread: tail 100b hop/pop.go (Reads the last 100 bytes of the file).
+ 
+fwrite command, list files in specified folder. Relative path only.
+ Usage; fwrite: [replace/append] [file] [content]
+ Example; fwrite: replace go.json {stuff:ok}
+ Example; fwrite: append "hi lo/go.json" {stuff:no}
+ 
+fcopy command, Copy a file. Relative path only.
+ Usage; fcopy: [orgfile] [destfile]
+ 
+mkdir command,  Make a folder. Relative path only.
+ Usage; mkdir: [folder]
+ 
+resume command, resume code session, user use only
+ Usage; resume: [message]
+
+done command, you are done coding.
+ Usage; done: [msg]
+ Example; done: I have finished the todo list!
+ 
+build command, runs a preset build command. returns log location to check for errors.
+ Usage; build:
+
+run command, runs a preset run command. returns log location to check for errors.
+ Usage; run:
+
+kill command, runs a preset kill command for running program.
+ Usage; kill:
+ 
+url command, downloads full HTML from url.
+ Usage; url: [fullurl]
+
+urltxt command, downloads full HTML and strips html tags.
+ Usage; urltxt: [fullurl]
+ 
