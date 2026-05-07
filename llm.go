@@ -404,10 +404,23 @@ func (a *App) handleToolCalls(response string) {
 				output := a.ExecuteTool(cmd, true)
 				a.logChat("tool-output", output)
 
+				// Detect repetition
+				if cmd == a.lastToolCmd {
+					a.repeatCount++
+				} else {
+					a.lastToolCmd = cmd
+					a.repeatCount = 1
+				}
+
+				feedback := fmt.Sprintf("(Tool) %s", output)
+				if a.repeatCount >= 3 {
+					feedback += "\n\nAre you stuck? use \"help:\" to list all commands or \"todo:\" to list things to do."
+				}
+
 				// Automatically send output back to AI
 				go func() {
 					if a.isCodeActive {
-						a.processMessage(fmt.Sprintf("(Tool) %s", output), "", true)
+						a.processMessage(feedback, "", true)
 					}
 				}()
 				return // Handle one command at a time to keep it sequential

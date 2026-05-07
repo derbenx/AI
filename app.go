@@ -27,6 +27,8 @@ type App struct {
 	isCodeActive   bool
 	sessionLog     string
 	processingLock sync.Mutex
+	lastToolCmd    string
+	repeatCount    int
 }
 
 // NewApp creates a new App application struct
