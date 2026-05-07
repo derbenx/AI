@@ -1,0 +1,41 @@
+func (a *App) getBuiltInTools() map[string]string {
+	return map[string]string{
+		"fread":  `{"tool_name": "fread", "description": "Reads file content. If the file is large (>2MB), the system will reject a full read; use 'head' or 'tail' to retrieve specific segments.", "parameters": {"type": "object", "properties": {"file_path": {"type": "string", "description": "Relative path to the file (e.g., 'main.go' or 'logs/build.log')."}, "operation": {"type": "string", "enum": ["tail", "head"], "description": "Optional: Read from the top (head) or bottom (tail) of the file."}, "count": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Number of lines to read when using head or tail."}}, "required": ["file_path"]}}`,
+		"fwrite": `{"tool_name": "fwrite", "description": "Modifies or overwrites the content of a specified file. Backs up existing files to !trash and attempts restoration if writing fails.", "parameters": {"type": "object", "properties": {"file_path": {"type": "string", "description": "The relative path to the file to be modified (e.g., 'src/main.py')."}, "operation": {"type": "string", "enum": ["write", "append"], "description": "The action to perform on the file. write replaces, append adds to the end."}, "content": {"type": "string", "description": "The new content that should be written to the file."}}, "required": ["file_path", "operation", "content"]}}`,
+		"rm":     `{"tool_name": "rm", "description": "Remove a file (with backup to !trash).", "usage": "rm <path>", "parameters": {"path": "Relative path to the file."}}`,
+		"ls":     `{"tool_name": "ls", "description": "List files and directories in a path or using a glob pattern.", "usage": "ls [path_or_pattern]", "parameters": {"path_or_pattern": "Relative path or glob pattern (e.g., *.go)."}}`,
+		"lines":  `{"tool_name": "lines", "description": "Count the number of lines in a file. Suggests fread for verification.", "usage": "lines <path>", "parameters": {"path": "Relative path to the file."}}`,
+		"fcopy":  `{"tool_name": "fcopy", "description": "Copy or rename a file.", "usage": "fcopy <src> <dst>", "parameters": {"src": "Source path.", "dst": "Destination path."}}`,
+		"mkdir":  `{"tool_name": "mkdir", "description": "Create a new directory. Suggests ls for verification.", "usage": "mkdir <path>", "parameters": {"path": "Path to create."}}`,
+		"note":   `{"tool_name": "note", "description": "Writes or retrieves persistent technical notes to assist with AI long-term memory.", "parameters": {"type": "object", "properties": {"id": {"type": "integer", "description": "The line number for the note. 0 is used to read the entire list."}, "content": {"type": "string", "description": "The text to be saved, required only for 'write' action."}}, "required": ["id"]}}`,
+		"todo":   `{"tool_name": "todo", "description": "Manages the users project checklist to track progress and prevent task drift.", "parameters": {"type": "object", "properties": {"id": {"type": "integer", "description": "The specific line number to use. Use 0 to read the entire list."}, "action": {"type": "string", "enum": ["started", "done"], "description": "started and done append that word to the line like a checklist."}}, "required": ["id"]}}`,
+		"url":    `{"tool_name": "url", "description": "Download a URL to a file in the !url folder. Suggests fread for reading.", "usage": "url <url>", "parameters": {"url": "The full URL to download."}}`,
+		"urltxt": `{"tool_name": "urltxt", "description": "Download a URL and extract text to a file in the !url folder. Suggests fread for reading.", "usage": "urltxt <url>", "parameters": {"url": "The full URL to process."}}`,
+		"build":  `{"tool_name": "build", "description": "Execute the build command defined in settings. Captures output to build.log. Suggests fread for reading logs.", "usage": "build", "parameters": {}}`,
+		"run":    `{"tool_name": "run", "description": "Execute the run command defined in settings. Captures output to run.log and waits 3 seconds. Suggests fread for reading logs.", "usage": "run", "parameters": {}}`,
+		"kill":   `{"tool_name": "kill", "description": "Terminate the running process using the kill command defined in settings.", "usage": "kill", "parameters": {}}`,
+		"help":   `{"tool_name": "help", "description": "List available tools or get detailed info for one tool.", "usage": "help [toolname]", "parameters": {"toolname": "Optional tool name to get info for."}}`,
+		"resume": `{"tool_name": "resume", "description": "Resume the AI automation loop with a message.", "usage": "resume <message>", "parameters": {"message": "Message to send to the AI."}}`,
+	}
+}
+
+func (a *App) getBuiltInToolSyntax() map[string]string {
+	return map[string]string{
+		"fread":  `fread: path [operation: head|tail] [count]   (Reads file content. Large files >2MB require head/tail.)`,
+		"fwrite": `fwrite: path <operation: write|append> <content>   (Modifies or overwrites a file. Backs up to !trash.)`,
+		"rm":     `rm: path   (Remove a file with backup to !trash.)`,
+		"ls":     `ls: [path_or_pattern]   (List files and directories, supports glob patterns like *.*)`,
+		"lines":  `lines: path   (Count the number of lines in a file.)`,
+		"fcopy":  `fcopy: src dst   (Copy or rename a file.)`,
+		"mkdir":  `mkdir: path   (Create a new directory.)`,
+		"note":   `note: id [content]   (Writes/retrieves technical notes. id 0 to read all. If you want to chatter, use note:.)`,
+		"todo":   `todo: id [action: started|done]   (Manages project checklist. id 0 to read all.)`,
+		"url":    `url: url   (Download a URL to !url folder.)`,
+		"urltxt": `urltxt: url   (Download and extract text from a URL to !url folder.)`,
+		"build":  `build:   (Execute the build command defined in settings. Captures to build.log.)`,
+		"run":    `run:   (Execute the run command defined in settings. Captures to run.log.)`,
+		"kill":   `kill:   (Terminate the running process using settings.)`,
+		"help":   `help: [toolname]   (List tools. Note: tools must be called by themselves on a new line with no extra chatter.)`,
+		"resume": `resume: message   (Resume the AI automation loop with a message.)`,
+	}
+}

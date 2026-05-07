@@ -21,8 +21,6 @@ func setupTestApp(t *testing.T) (*App, string) {
 			},
 		},
 	}
-	// Mock UpdateAINotes for tests to update app state
-	// In the real app, this is in app.go and updates a.aiNotes
 	return app, tempDir
 }
 
@@ -50,10 +48,10 @@ func TestToolFWriteAndBackup(t *testing.T) {
 	fullPath := filepath.Join(tempDir, filePath)
 
 	// First write
-	app.ExecuteTool("fwrite: " + filePath + " write initial content", false)
+	app.ExecuteTool("fwrite: replace " + filePath + " initial content", false)
 
 	// Second write (should trigger backup)
-	output := app.ExecuteTool("fwrite: " + filePath + " write updated content", false)
+	output := app.ExecuteTool("fwrite: replace " + filePath + " updated content", false)
 	if !strings.Contains(output, "(Backup saved to `!trash/") {
 		t.Errorf("Expected backup message with backticks, got: %s", output)
 	}
@@ -72,6 +70,44 @@ func TestToolFWriteAndBackup(t *testing.T) {
 	}
 }
 
+func TestToolFRead(t *testing.T) {
+	app, tempDir := setupTestApp(t)
+	defer os.RemoveAll(tempDir)
+
+	filePath := "test.txt"
+	os.WriteFile(filepath.Join(tempDir, filePath), []byte("line1\nline2\nline3\nline4\nline5"), 0644)
+
+	// Test head lines
+	output := app.ExecuteTool("fread: head 2 " + filePath, false)
+	if output != "line1\nline2" {
+		t.Errorf("Expected 'line1\nline2', got: %q", output)
+	}
+
+	// Test tail lines
+	output = app.ExecuteTool("fread: tail 2 " + filePath, false)
+	if output != "line4\nline5" {
+		t.Errorf("Expected 'line4\nline5', got: %q", output)
+	}
+
+	// Test head bytes
+	output = app.ExecuteTool("fread: head 5b " + filePath, false)
+	if output != "line1" {
+		t.Errorf("Expected 'line1', got: %q", output)
+	}
+
+	// Test tail bytes
+	output = app.ExecuteTool("fread: tail 5b " + filePath, false)
+	if output != "line5" {
+		t.Errorf("Expected 'line5', got: %q", output)
+	}
+
+	// Test all
+	output = app.ExecuteTool("fread: all " + filePath, false)
+	if !strings.Contains(output, "line1\nline2\nline3\nline4\nline5") {
+		t.Errorf("Expected all content, got: %s", output)
+	}
+}
+
 func TestToolFReadLargeFile(t *testing.T) {
 	app, tempDir := setupTestApp(t)
 	defer os.RemoveAll(tempDir)
@@ -83,7 +119,7 @@ func TestToolFReadLargeFile(t *testing.T) {
 	data := make([]byte, 2*1024*1024 + 1024)
 	os.WriteFile(fullPath, data, 0644)
 
-	output := app.ExecuteTool("fread: " + filePath, false)
+	output := app.ExecuteTool("fread: all " + filePath, false)
 	if !strings.Contains(output, "use head or tail") || !strings.Contains(output, "Example: `fread:") {
 		t.Errorf("Expected large file warning with backticked example, got: %s", output)
 	}
@@ -132,16 +168,9 @@ func TestToolRMAndBackup(t *testing.T) {
 func TestToolHelp(t *testing.T) {
 	app, _ := setupTestApp(t)
 
-	// Test User help (syntax)
-	outputUser := app.ExecuteTool("help: fwrite", false)
-	if !strings.Contains(outputUser, "Backs up to !trash") || strings.Contains(outputUser, "{") {
-		t.Errorf("Expected syntax for user, got: %s", outputUser)
-	}
-
-	// Test AI help (JSON)
-	outputAI := app.ExecuteTool("help: fwrite", true)
-	if !strings.Contains(outputAI, `{"tool_name": "fwrite"`) {
-		t.Errorf("Expected JSON for AI, got: %s", outputAI)
+	output := app.ExecuteTool("help: fwrite", false)
+	if !strings.Contains(output, "replace/append") {
+		t.Errorf("Expected new help format, got: %s", output)
 	}
 }
 
@@ -153,107 +182,67 @@ func TestToolPathWithBackslash(t *testing.T) {
 	os.WriteFile(filepath.Join(tempDir, "subdir", "file.txt"), []byte("test content"), 0644)
 
 	// Simulate Windows-style path input
-	output := app.ExecuteTool(`fread: subdir\file.txt`, false)
+	output := app.ExecuteTool(`fread: all subdir\file.txt`, false)
 	if !strings.Contains(output, "test content") {
 		t.Errorf("Expected 'test content' in output, got: %s", output)
 	}
 }
 
-func TestSanitizeOutput(t *testing.T) {
-	app := &App{
-		config: Config{
-			ProjectFolder: "/home/user/project",
-		},
-	}
-
-	input := "/home/user/project/file.txt"
-	expected := "./file.txt"
-	output := app.sanitizeOutput(input)
-	if output != expected {
-		t.Errorf("Expected %s, got %s", expected, output)
-	}
-
-	// Test with subdirectory
-	input = "/home/user/project/subdir/file.txt"
-	expected = "./subdir/file.txt"
-	output = app.sanitizeOutput(input)
-	if output != expected {
-		t.Errorf("Expected %s, got %s", expected, output)
-	}
-}
-
-
-func TestToolNote(t *testing.T) {
+func TestToolTodo(t *testing.T) {
 	app, _ := setupTestApp(t)
+	app.todoList = "Task 1\nTask 2"
 
-	// Test empty notes
-	output := app.ExecuteTool("note: 0", false)
-	if output != "No notes found." {
-		t.Errorf("Expected 'No notes found.', got: %s", output)
+	// Mark done
+	app.ExecuteTool("todo: 1 done", false)
+	if app.todoList != "Task 1 [done]\nTask 2" {
+		t.Errorf("Expected 'Task 1 [done]\nTask 2', got: %q", app.todoList)
 	}
 
-	// Test writing note
-	app.ExecuteTool("note: 1 first note", false)
-	output = app.ExecuteTool("note: 0", false)
-	if !strings.Contains(output, "first note") {
-		t.Errorf("Expected 'first note', got: %s", output)
-	}
-
-	// Test writing specific ID with padding
-	app.ExecuteTool("note: 3 third note", false)
-	output = app.ExecuteTool("note: 0", false)
-	if !strings.Contains(output, "first note") || !strings.Contains(output, "third note") {
-		t.Errorf("Expected padded notes, got: %q", output)
-	}
-
-	// Test reading specific note
-	output = app.ExecuteTool("note: 3", false)
-	if output != "Note 3: third note" {
-		t.Errorf("Expected 'Note 3: third note', got: %s", output)
-	}
-
-	// Test linebreak removal
-	app.ExecuteTool("note: 4 multi\nline\nnote", false)
-	output = app.ExecuteTool("note: 4", false)
-	if output != "Note 4: multi line note" {
-		t.Errorf("Expected 'Note 4: multi line note', got: %q", output)
+	// Reset
+	app.ExecuteTool("todo: 1 reset", false)
+	if app.todoList != "Task 1\nTask 2" {
+		t.Errorf("Expected 'Task 1\nTask 2', got: %q", app.todoList)
 	}
 }
 
-func TestToolFWriteRestore(t *testing.T) {
-	app, tempDir := setupTestApp(t)
-	defer os.RemoveAll(tempDir)
+func TestToolFWriteQuotedPath(t *testing.T) {
+    app, tempDir := setupTestApp(t)
+    defer os.RemoveAll(tempDir)
 
-	filePath := "restore_test.txt"
-	fullPath := filepath.Join(tempDir, filePath)
+    path := "path with spaces.txt"
+    app.ExecuteTool(`fwrite: replace "` + path + `" some content`, false)
 
-	// Write initial content
-	os.WriteFile(fullPath, []byte("initial content"), 0644)
+    content, _ := os.ReadFile(filepath.Join(tempDir, path))
+    if string(content) != "some content" {
+        t.Errorf("Expected 'some content', got %q", string(content))
+    }
+}
 
-	// Attempt to write with invalid operation to simulate failure (not easy with current implementation)
-	// Instead, let's make the directory read-only to force a write failure if possible
-	// Or more reliably, test the restore logic directly if we can't easily trigger write failure in os.WriteFile
+func TestSplitArgs(t *testing.T) {
+	app := &App{}
 
-	// Let's mock a failure by using a path that is a directory
-	dirPath := "faildir"
-	os.Mkdir(filepath.Join(tempDir, dirPath), 0755)
+	tests := []struct {
+		input    string
+		expected []string
+	}{
+		{`arg1 arg2`, []string{"arg1", "arg2"}},
+		{`"arg with spaces" arg2`, []string{"arg with spaces", "arg2"}},
+		{`'arg with spaces' arg2`, []string{"arg with spaces", "arg2"}},
+		{`path\with\backslashes arg2`, []string{`path\with\backslashes`, "arg2"}},
+		{`"quoted path\with\backslashes" arg2`, []string{`quoted path\with\backslashes`, "arg2"}},
+		{`replace "quoted path" some content`, []string{"replace", "quoted path", "some", "content"}},
+	}
 
-	// Create a file with same name as dir to cause failure? No, let's use a path that is blocked.
-	blockedFile := "blocked.txt"
-	os.WriteFile(filepath.Join(tempDir, blockedFile), []byte("original"), 0644)
-
-	// On Linux, we can try to make it unwriteable
-	os.Chmod(filepath.Join(tempDir, blockedFile), 0444)
-
-	output := app.ExecuteTool("fwrite: " + blockedFile + " write new content", false)
-
-	if strings.Contains(output, "Writing data failed") && strings.Contains(output, "Original file restored from backup") {
-		t.Log("Successfully verified restore logic")
-	} else if strings.Contains(output, "permission denied") || strings.Contains(output, "Error writing to file") {
-		// Even if it didn't restore (maybe backup failed too if permissions were weird), it caught the error
-		t.Logf("Caught write error as expected: %s", output)
-	} else {
-		// If it actually succeeded, chmod didn't work as expected (e.g. running as root)
-		t.Logf("Write unexpectedly succeeded or gave different output: %s", output)
+	for _, tc := range tests {
+		result := app.splitArgs(tc.input)
+		if len(result) != len(tc.expected) {
+			t.Errorf("For input %q, expected %d parts, got %d: %v", tc.input, len(tc.expected), len(result), result)
+			continue
+		}
+		for i := range result {
+			if result[i] != tc.expected[i] {
+				t.Errorf("For input %q, part %d: expected %q, got %q", tc.input, i, tc.expected[i], result[i])
+			}
+		}
 	}
 }

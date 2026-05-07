@@ -174,9 +174,36 @@ func (a *App) securePath(path string) (string, error) {
 func (a *App) toolFRead(args string) string {
 	parts := a.splitArgs(args)
 	if len(parts) == 0 {
-		return "Error: fread requires a file path. See 'help: fread'"
+		return "Error: fread requires arguments. See 'help: fread'"
 	}
-	path := parts[0]
+
+	var operation, mode, path string
+	var count int
+	var isAdvanced bool
+
+	if len(parts) >= 3 {
+		op := strings.ToLower(parts[0])
+		if op == "head" || op == "tail" {
+			operation = op
+			modeStr := strings.ToLower(parts[1])
+			if strings.HasSuffix(modeStr, "b") {
+				mode = "bytes"
+				count, _ = strconv.Atoi(strings.TrimSuffix(modeStr, "b"))
+			} else {
+				mode = "lines"
+				count, _ = strconv.Atoi(modeStr)
+			}
+			path = parts[2]
+			isAdvanced = true
+		}
+	}
+
+	if !isAdvanced {
+		// Default to all
+		path = parts[len(parts)-1]
+		operation = "all"
+	}
+
 	fullPath, err := a.securePath(path)
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
@@ -186,37 +213,48 @@ func (a *App) toolFRead(args string) string {
 		return fmt.Sprintf("Error: %v", err)
 	}
 
-	operation := ""
-	count := 0
-	if len(parts) > 2 {
-		operation = strings.ToLower(parts[1])
-		count, _ = strconv.Atoi(parts[2])
+	if operation == "all" && info.Size() > 2*1024*1024 {
+		return fmt.Sprintf("This file is %.2fMB, use head or tail. Example: `fread: head 50 %s`", float64(info.Size())/(1024*1024), path)
 	}
 
-	if info.Size() > 2*1024*1024 && operation == "" {
-		return fmt.Sprintf("This file is %.2fMB, use head or tail. Example: `fread: %s head 50`", float64(info.Size())/(1024*1024), path)
+	file, err := os.Open(fullPath)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
 	}
+	defer file.Close()
 
-	if operation == "head" || operation == "tail" {
-		if count <= 0 {
-			count = 50 // Default
-		}
-		file, err := os.Open(fullPath)
-		if err != nil {
-			return fmt.Sprintf("Error: %v", err)
-		}
-		defer file.Close()
-
-		var result []string
-		if operation == "head" {
+	if operation == "head" {
+		if mode == "bytes" {
+			buf := make([]byte, count)
+			n, err := file.Read(buf)
+			if err != nil && err != io.EOF {
+				return fmt.Sprintf("Error: %v", err)
+			}
+			return string(buf[:n])
+		} else {
+			var result []string
 			scanner := bufio.NewScanner(file)
 			for i := 0; i < count && scanner.Scan(); i++ {
 				result = append(result, scanner.Text())
 			}
+			return strings.Join(result, "\n")
+		}
+	} else if operation == "tail" {
+		if mode == "bytes" {
+			size := info.Size()
+			if int64(count) > size {
+				count = int(size)
+			}
+			file.Seek(size-int64(count), 0)
+			buf := make([]byte, count)
+			n, err := file.Read(buf)
+			if err != nil && err != io.EOF {
+				return fmt.Sprintf("Error: %v", err)
+			}
+			return string(buf[:n])
 		} else {
 			// Efficient tail for large files
-			stat, _ := file.Stat()
-			size := stat.Size()
+			size := info.Size()
 			bufSize := int64(64 * 1024) // 64KB buffer
 			if bufSize > size {
 				bufSize = size
@@ -240,7 +278,6 @@ func (a *App) toolFRead(args string) string {
 				lines := strings.Split(text, "\n")
 
 				for i := len(lines) - 1; i >= 0; i-- {
-					// Skip the very last newline if it's the end of file
 					if pos+readSize == size && i == len(lines)-1 && lines[i] == "" {
 						continue
 					}
@@ -257,7 +294,6 @@ func (a *App) toolFRead(args string) string {
 			}
 			return strings.Join(finalLines, "\n")
 		}
-		return strings.Join(result, "\n")
 	}
 
 	content, err := os.ReadFile(fullPath)
@@ -317,29 +353,43 @@ func (a *App) splitArgs(args string) []string {
 func (a *App) toolFWrite(args string) string {
 	parts := a.splitArgs(args)
 	if len(parts) < 3 {
-		return "Error: fwrite requires <path> <operation: write|append> <content>. See 'help: fwrite'"
+		return "Error: fwrite requires <operation: replace|append> <path> <content>. See 'help: fwrite'"
 	}
-	path := parts[0]
-	operation := strings.ToLower(parts[1])
+	operation := strings.ToLower(parts[0])
+	path := parts[1]
 
-	// More robust content extraction: find where the operation ends in the original string
-	// We look for the operation word that is NOT inside the quoted path
+	// More robust content extraction: find where the path ends in the original string
 	content := ""
-	opIndex := -1
 
-	// If path was quoted, it will be parts[0]. Find its end in args.
+	// If path was quoted, we need to find it correctly in the args string
+	// This is a bit tricky because splitArgs already processed it.
+	// Let's use a simpler approach: join parts[2:] with spaces, but that might lose original spacing.
+	// Re-calculating content from raw args:
 	searchStart := 0
-	if strings.Contains(args, path) {
-		searchStart = strings.Index(args, path) + len(path)
-		if searchStart < len(args) && (args[searchStart] == '"' || args[searchStart] == '\'') {
+	opIdx := strings.Index(strings.ToLower(args), operation)
+	if opIdx != -1 {
+		searchStart = opIdx + len(operation)
+		// skip spaces
+		for searchStart < len(args) && args[searchStart] == ' ' {
 			searchStart++
 		}
-	}
-
-	opIndex = strings.Index(strings.ToLower(args[searchStart:]), operation)
-	if opIndex != -1 {
-		opEnd := searchStart + opIndex + len(operation)
-		content = strings.TrimLeft(args[opEnd:], " ")
+		// now we are at the path.
+		if searchStart < len(args) {
+			if args[searchStart] == '"' || args[searchStart] == '\'' {
+				quote := args[searchStart]
+				searchStart++ // move inside quote
+				pathEnd := strings.Index(args[searchStart:], string(quote))
+				if pathEnd != -1 {
+					searchStart += pathEnd + 1 // move past quote
+				}
+			} else {
+				pathEnd := strings.Index(args[searchStart:], " ")
+				if pathEnd != -1 {
+					searchStart += pathEnd // move to the space after path
+				}
+			}
+		}
+		content = strings.TrimLeft(args[searchStart:], " ")
 	} else {
 		content = strings.Join(parts[2:], " ")
 	}
@@ -388,8 +438,8 @@ func (a *App) toolFWrite(args string) string {
 	}
 
 	opDone := operation + "ed"
-	if operation == "write" {
-		opDone = "written"
+	if operation == "replace" {
+		opDone = "replaced"
 	}
 	successMsg := fmt.Sprintf("File `%s` %s successfully.", path, opDone)
 	if backedUp {
@@ -623,12 +673,28 @@ func (a *App) toolTodo(args string) string {
 
 	if len(parts) > 1 {
 		action := strings.ToLower(parts[1])
-		if action == "started" || action == "done" {
-			lines[id-1] = strings.TrimSpace(lines[id-1]) + " [" + action + "]"
-			newContent := strings.Join(lines, "\n")
-			a.UpdateTodoList(newContent)
-			wailsruntime.EventsEmit(a.ctx, "todo-updated", newContent)
-			return fmt.Sprintf("Task %d marked as %s.", id, action)
+		if action == "done" {
+			if !strings.HasSuffix(lines[id-1], " [done]") {
+				lines[id-1] = strings.TrimSpace(lines[id-1]) + " [done]"
+				newContent := strings.Join(lines, "\n")
+				a.UpdateTodoList(newContent)
+				if a.ctx != nil {
+					wailsruntime.EventsEmit(a.ctx, "todo-updated", newContent)
+				}
+				return fmt.Sprintf("Task %d marked as done.", id)
+			}
+			return fmt.Sprintf("Task %d is already done.", id)
+		} else if action == "reset" {
+			if strings.HasSuffix(lines[id-1], " [done]") {
+				lines[id-1] = strings.TrimSuffix(lines[id-1], " [done]")
+				newContent := strings.Join(lines, "\n")
+				a.UpdateTodoList(newContent)
+				if a.ctx != nil {
+					wailsruntime.EventsEmit(a.ctx, "todo-updated", newContent)
+				}
+				return fmt.Sprintf("Task %d reset.", id)
+			}
+			return fmt.Sprintf("Task %d was not marked as done.", id)
 		}
 	}
 
@@ -875,50 +941,33 @@ func (a *App) toolDynamic(tool, args string) string {
 
 func (a *App) getBuiltInTools() map[string]string {
 	return map[string]string{
-		"fread":  `{"tool_name": "fread", "description": "Reads file content. If the file is large (>2MB), the system will reject a full read; use 'head' or 'tail' to retrieve specific segments.", "parameters": {"type": "object", "properties": {"file_path": {"type": "string", "description": "Relative path to the file (e.g., 'main.go' or 'logs/build.log')."}, "operation": {"type": "string", "enum": ["tail", "head"], "description": "Optional: Read from the top (head) or bottom (tail) of the file."}, "count": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Number of lines to read when using head or tail."}}, "required": ["file_path"]}}`,
-		"fwrite": `{"tool_name": "fwrite", "description": "Modifies or overwrites the content of a specified file. Backs up existing files to !trash and attempts restoration if writing fails.", "parameters": {"type": "object", "properties": {"file_path": {"type": "string", "description": "The relative path to the file to be modified (e.g., 'src/main.py')."}, "operation": {"type": "string", "enum": ["write", "append"], "description": "The action to perform on the file. write replaces, append adds to the end."}, "content": {"type": "string", "description": "The new content that should be written to the file."}}, "required": ["file_path", "operation", "content"]}}`,
-		"rm":     `{"tool_name": "rm", "description": "Remove a file (with backup to !trash).", "usage": "rm <path>", "parameters": {"path": "Relative path to the file."}}`,
-		"ls":     `{"tool_name": "ls", "description": "List files and directories in a path or using a glob pattern.", "usage": "ls [path_or_pattern]", "parameters": {"path_or_pattern": "Relative path or glob pattern (e.g., *.go)."}}`,
-		"lines":  `{"tool_name": "lines", "description": "Count the number of lines in a file. Suggests fread for verification.", "usage": "lines <path>", "parameters": {"path": "Relative path to the file."}}`,
-		"fcopy":  `{"tool_name": "fcopy", "description": "Copy or rename a file.", "usage": "fcopy <src> <dst>", "parameters": {"src": "Source path.", "dst": "Destination path."}}`,
-		"mkdir":  `{"tool_name": "mkdir", "description": "Create a new directory. Suggests ls for verification.", "usage": "mkdir <path>", "parameters": {"path": "Path to create."}}`,
-		"note":   `{"tool_name": "note", "description": "Writes or retrieves persistent technical notes to assist with AI long-term memory.", "parameters": {"type": "object", "properties": {"id": {"type": "integer", "description": "The line number for the note. 0 is used to read the entire list."}, "content": {"type": "string", "description": "The text to be saved, required only for 'write' action."}}, "required": ["id"]}}`,
-		"todo":   `{"tool_name": "todo", "description": "Manages the users project checklist to track progress and prevent task drift.", "parameters": {"type": "object", "properties": {"id": {"type": "integer", "description": "The specific line number to use. Use 0 to read the entire list."}, "action": {"type": "string", "enum": ["started", "done"], "description": "started and done append that word to the line like a checklist."}}, "required": ["id"]}}`,
-		"url":    `{"tool_name": "url", "description": "Download a URL to a file in the !url folder. Suggests fread for reading.", "usage": "url <url>", "parameters": {"url": "The full URL to download."}}`,
-		"urltxt": `{"tool_name": "urltxt", "description": "Download a URL and extract text to a file in the !url folder. Suggests fread for reading.", "usage": "urltxt <url>", "parameters": {"url": "The full URL to process."}}`,
-		"build":  `{"tool_name": "build", "description": "Execute the build command defined in settings. Captures output to build.log. Suggests fread for reading logs.", "usage": "build", "parameters": {}}`,
-		"run":    `{"tool_name": "run", "description": "Execute the run command defined in settings. Captures output to run.log and waits 3 seconds. Suggests fread for reading logs.", "usage": "run", "parameters": {}}`,
-		"kill":   `{"tool_name": "kill", "description": "Terminate the running process using the kill command defined in settings.", "usage": "kill", "parameters": {}}`,
-		"help":   `{"tool_name": "help", "description": "List available tools or get detailed info for one tool.", "usage": "help [toolname]", "parameters": {"toolname": "Optional tool name to get info for."}}`,
-		"resume": `{"tool_name": "resume", "description": "Resume the AI automation loop with a message.", "usage": "resume <message>", "parameters": {"message": "Message to send to the AI."}}`,
+		"fread":  "Reads a file on disk. Relative path only.\n Usage; fread: [head/tail] [lines/bytes/all] [file]\n Example; fread: head 10 pop.go (Reads the top 10 lines of the file).\n Example; fread: tail 100b hop/pop.go (Reads the last 100 bytes of the file).",
+		"fwrite": "modifies or overwrites a file. Relative path only.\n Usage; fwrite: [replace/append] [file] [content]\n Example; fwrite: replace go.json {stuff:ok}\n Example; fwrite: append \"hi lo/go.json\" {stuff:no}",
+		"rm":     "remove/delete a file. Relative path only.\n Usage; rm: [file]",
+		"ls":     "list files in specified folder. Relative path only.\n Usage; ls: [file]",
+		"lines":  "number of lines in a file. Relative path only.\n Usage; lines: [file]\n Example; lines: url/web.htm",
+		"fcopy":  "Copy a file. Relative path only.\n Usage; fcopy: [orgfile] [destfile]",
+		"mkdir":  "Make a folder. Relative path only.\n Usage; mkdir: [folder]",
+		"note":   "reads a persistent technical note.\n Usage; note: [1-999] {note}\n Example; note: 0 (Read all notes)\n Example; note: 1 (Read note #1)\n Example; note: 2 I'd rather be at the beach (saves note to slot #2)",
+		"todo":   "Manages a user made to-do list as a checklist\n Usage; todo: [1-999] {done/reset}\n Example; todo: 0 (shows entire list)\n Example; todo: 1 (shows task #1)\n Example; todo: 2 done (appends [done] to the end of line #2)\n Example; todo: 3 reset (removes [done] from the end of line #3)",
+		"url":    "downloads full HTML from url.\n Usage; url: [fullurl]",
+		"urltxt": "downloads full HTML and strips html tags.\n Usage; urltxt: [fullurl]",
+		"build":  "runs a preset build command. returns log location to check for errors.\n Usage; build:",
+		"run":    "runs a preset run command. returns log location to check for errors.\n Usage; run:",
+		"kill":   "runs a preset kill command for running program.\n Usage; kill:",
+		"help":   "lists info about other tools/commands.\n Usage; help: [tool]\n Example; help: (lists all tool names)\n Example; help: note (describes how to use note)",
+		"resume": "resume code session, user use only\n Usage; resume: [message]",
+		"done":   "you are done coding.\n Usage; done: [msg]\n Example; done: I have finished the todo list!",
 	}
 }
 
 func (a *App) getBuiltInToolSyntax() map[string]string {
-	return map[string]string{
-		"fread":  `fread: path [operation: head|tail] [count]   (Reads file content. Large files >2MB require head/tail.)`,
-		"fwrite": `fwrite: path <operation: write|append> <content>   (Modifies or overwrites a file. Backs up to !trash.)`,
-		"rm":     `rm: path   (Remove a file with backup to !trash.)`,
-		"ls":     `ls: [path_or_pattern]   (List files and directories, supports glob patterns like *.*)`,
-		"lines":  `lines: path   (Count the number of lines in a file.)`,
-		"fcopy":  `fcopy: src dst   (Copy or rename a file.)`,
-		"mkdir":  `mkdir: path   (Create a new directory.)`,
-		"note":   `note: id [content]   (Writes/retrieves technical notes. id 0 to read all. If you want to chatter, use note:.)`,
-		"todo":   `todo: id [action: started|done]   (Manages project checklist. id 0 to read all.)`,
-		"url":    `url: url   (Download a URL to !url folder.)`,
-		"urltxt": `urltxt: url   (Download and extract text from a URL to !url folder.)`,
-		"build":  `build:   (Execute the build command defined in settings. Captures to build.log.)`,
-		"run":    `run:   (Execute the run command defined in settings. Captures to run.log.)`,
-		"kill":   `kill:   (Terminate the running process using settings.)`,
-		"help":   `help: [toolname]   (List tools. Note: tools must be called by themselves on a new line with no extra chatter.)`,
-		"resume": `resume: message   (Resume the AI automation loop with a message.)`,
-	}
+	return map[string]string{}
 }
 
 func (a *App) toolHelp(toolname string, isAI bool) string {
 	toolsDir := filepath.Join(a.getExecDir(), "tools")
 	builtIns := a.getBuiltInTools()
-	syntax := a.getBuiltInToolSyntax()
 
 	toolname = strings.TrimSuffix(strings.TrimSpace(toolname), ":")
 
@@ -929,13 +978,6 @@ func (a *App) toolHelp(toolname string, isAI bool) string {
 				return fmt.Sprintf("Error: Tool '%s' is not allowed.", toolname)
 			}
 
-			// For users, prefer syntax
-			if !isAI {
-				if s, ok := syntax[toolname]; ok {
-					desc = s
-				}
-			}
-
 			// Check for override in files
 			if d, err := os.ReadFile(filepath.Join(toolsDir, toolname+".txt")); err == nil {
 				desc = string(d)
@@ -943,14 +985,7 @@ func (a *App) toolHelp(toolname string, isAI bool) string {
 				desc = string(d)
 			}
 
-			// Clean up desc if it starts with the tool name
-			cleanDesc := strings.TrimSpace(desc)
-			prefix := toolname + ":"
-			if strings.HasPrefix(strings.ToLower(cleanDesc), strings.ToLower(prefix)) {
-				cleanDesc = strings.TrimSpace(cleanDesc[len(prefix):])
-			}
-
-			return fmt.Sprintf("[Help for %s:]  %s", strings.Title(toolname), cleanDesc)
+			return fmt.Sprintf("[Help for %s:]  %s", strings.Title(toolname), desc)
 		}
 		tools, _ := a.ListAvailableTools()
 		for _, t := range tools {
@@ -958,12 +993,7 @@ func (a *App) toolHelp(toolname string, isAI bool) string {
 				if isAI && !a.isToolAllowed(toolname) {
 					continue
 				}
-				cleanDesc := strings.TrimSpace(t.Description)
-				prefix := t.Name + ":"
-				if strings.HasPrefix(strings.ToLower(cleanDesc), strings.ToLower(prefix)) {
-					cleanDesc = strings.TrimSpace(cleanDesc[len(prefix):])
-				}
-				return fmt.Sprintf("[Help for %s:]  %s", strings.Title(t.Name), cleanDesc)
+				return fmt.Sprintf("[Help for %s:]  %s", strings.Title(t.Name), t.Description)
 			}
 		}
 		return fmt.Sprintf("Error: Tool '%s' not found.", toolname)
@@ -999,8 +1029,13 @@ func (a *App) toolHelp(toolname string, isAI bool) string {
 
 func (a *App) isToolAllowed(tool string) bool {
 	tool = strings.ToLower(tool)
-	if tool == "help" || tool == "done" || tool == "resume" {
+	// help, todo, note and done cannot be disabled for AI.
+	if tool == "help" || tool == "todo" || tool == "note" || tool == "done" {
 		return true
+	}
+	// resume is user only.
+	if tool == "resume" {
+		return false
 	}
 	for _, t := range a.config.AllowedTools {
 		if strings.ToLower(t) == tool {

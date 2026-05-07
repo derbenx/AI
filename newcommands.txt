@@ -24,7 +24,7 @@ rm command, remove/delete a file. Relative path only.
  Usage; rm: [file]
  
 ls command, list files in specified folder. Relative path only.
- Usage; rm: [file]
+ Usage; ls: [file]
  
 fread command: Reads a file on disk. Relative path only.
  Usage; fread: [head/tail] [lines/bytes/all] [file]

@@ -106,8 +106,15 @@ function appendMessage(role, content) {
         gfm: true
     });
     div.innerHTML = marked.parse(label + content);
+
+    // Conditional auto-scroll
+    const isAtBottom = chatWindow.scrollHeight - chatWindow.scrollTop <= chatWindow.clientHeight + 50;
+
     chatWindow.appendChild(div);
-    chatWindow.scrollTop = chatWindow.scrollHeight;
+
+    if (isAtBottom) {
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
     return div;
 }
 
@@ -123,8 +130,14 @@ EventsOn('token', (token) => {
         breaks: true,
         gfm: true
     });
+
+    const isAtBottom = chatWindow.scrollHeight - chatWindow.scrollTop <= chatWindow.clientHeight + 50;
+
     currentAiMsgDiv.innerHTML = marked.parse("(AI) " + currentAiContent);
-    chatWindow.scrollTop = chatWindow.scrollHeight;
+
+    if (isAtBottom) {
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
 });
 
 EventsOn('done', () => {
@@ -183,6 +196,7 @@ sendBtn.onclick = async () => {
 
     appendMessage('user', text);
     chatInput.value = "";
+    chatInput.focus();
 
     try {
         await SendMessage(text, currentImagePath);
@@ -190,6 +204,28 @@ sendBtn.onclick = async () => {
         appendMessage('ai', `Error: ${err}`);
     }
 };
+
+chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendBtn.click();
+    }
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'Tab') {
+        e.preventDefault();
+        const tabs = Array.from(document.querySelectorAll('.tab-btn'));
+        const activeIdx = tabs.findIndex(t => t.classList.contains('active'));
+        let nextIdx;
+        if (e.shiftKey) {
+            nextIdx = (activeIdx - 1 + tabs.length) % tabs.length;
+        } else {
+            nextIdx = (activeIdx + 1) % tabs.length;
+        }
+        tabs[nextIdx].click();
+    }
+});
 
 document.getElementById('clear-btn').onclick = async () => {
     await ClearHistory();
@@ -305,7 +341,16 @@ async function refreshTools() {
         cb.type = 'checkbox';
         cb.value = t.name;
         cb.id = `tool-${t.name}`;
-        if (config.allowed_tools && config.allowed_tools.includes(t.name)) {
+
+        const roTools = ['help', 'todo', 'note', 'done', 'resume'];
+        if (roTools.includes(t.name)) {
+            cb.disabled = true;
+            if (t.name === 'resume') {
+                cb.checked = false;
+            } else {
+                cb.checked = true;
+            }
+        } else if (config.allowed_tools && config.allowed_tools.includes(t.name)) {
             cb.checked = true;
         }
 
