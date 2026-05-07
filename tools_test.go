@@ -159,6 +159,29 @@ func TestToolPathWithBackslash(t *testing.T) {
 	}
 }
 
+func TestSanitizeOutput(t *testing.T) {
+	app := &App{
+		config: Config{
+			ProjectFolder: "/home/user/project",
+		},
+	}
+
+	input := "/home/user/project/file.txt"
+	expected := "./file.txt"
+	output := app.sanitizeOutput(input)
+	if output != expected {
+		t.Errorf("Expected %s, got %s", expected, output)
+	}
+
+	// Test with subdirectory
+	input = "/home/user/project/subdir/file.txt"
+	expected = "./subdir/file.txt"
+	output = app.sanitizeOutput(input)
+	if output != expected {
+		t.Errorf("Expected %s, got %s", expected, output)
+	}
+}
+
 
 func TestToolNote(t *testing.T) {
 	app, _ := setupTestApp(t)

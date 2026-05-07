@@ -84,7 +84,14 @@ func (a *App) sanitizeOutput(output string) string {
 		return output
 	}
 	// Replace absolute project path with ./
-	return strings.ReplaceAll(output, a.config.ProjectFolder, "./")
+	// First ensure consistent slash direction for the search
+	projFolder := filepath.ToSlash(a.config.ProjectFolder)
+	if !strings.HasSuffix(projFolder, "/") {
+		projFolder += "/"
+	}
+
+	sanitized := strings.ReplaceAll(filepath.ToSlash(output), projFolder, "./")
+	return sanitized
 }
 
 func (a *App) ExecuteTool(command string, isAI bool) string {
@@ -151,8 +158,8 @@ func (a *App) ExecuteTool(command string, isAI bool) string {
 }
 
 func (a *App) securePath(path string) (string, error) {
-	// Support Windows paths by converting backslashes
-	path = filepath.FromSlash(strings.ReplaceAll(path, "\\", "/"))
+	// Support Windows paths by converting backslashes and cleaning
+	path = filepath.Clean(filepath.FromSlash(strings.ReplaceAll(path, "\\", "/")))
 	fullPath := filepath.Join(a.config.ProjectFolder, path)
 	rel, err := filepath.Rel(a.config.ProjectFolder, fullPath)
 	if err != nil {
@@ -935,7 +942,15 @@ func (a *App) toolHelp(toolname string, isAI bool) string {
 			} else if d, err := os.ReadFile(filepath.Join(toolsDir, toolname+".json")); err == nil {
 				desc = string(d)
 			}
-			return fmt.Sprintf("%s: %s", toolname, desc)
+
+			// Clean up desc if it starts with the tool name
+			cleanDesc := strings.TrimSpace(desc)
+			prefix := toolname + ":"
+			if strings.HasPrefix(strings.ToLower(cleanDesc), strings.ToLower(prefix)) {
+				cleanDesc = strings.TrimSpace(cleanDesc[len(prefix):])
+			}
+
+			return fmt.Sprintf("[Help for %s:]  %s", strings.Title(toolname), cleanDesc)
 		}
 		tools, _ := a.ListAvailableTools()
 		for _, t := range tools {
@@ -943,7 +958,12 @@ func (a *App) toolHelp(toolname string, isAI bool) string {
 				if isAI && !a.isToolAllowed(toolname) {
 					continue
 				}
-				return fmt.Sprintf("%s: %s", t.Name, strings.TrimSpace(t.Description))
+				cleanDesc := strings.TrimSpace(t.Description)
+				prefix := t.Name + ":"
+				if strings.HasPrefix(strings.ToLower(cleanDesc), strings.ToLower(prefix)) {
+					cleanDesc = strings.TrimSpace(cleanDesc[len(prefix):])
+				}
+				return fmt.Sprintf("[Help for %s:]  %s", strings.Title(t.Name), cleanDesc)
 			}
 		}
 		return fmt.Sprintf("Error: Tool '%s' not found.", toolname)
