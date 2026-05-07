@@ -256,17 +256,17 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 		}
 
 		if isCommand {
-			if tool == "resume" {
+			if strings.ToLower(tool) == "resume" {
 				a.isCodeActive = true
 				// Release lock before recursive call to avoid deadlock
 				a.processingLock.Unlock()
-				err := a.processMessage("(Tool) resume: "+args, "", true)
+				err := a.processMessage(args, "", true)
 				a.processingLock.Lock()
 				return err
 			}
 			output := a.ExecuteTool(text, false)
-			a.logChat("tool-output", fmt.Sprintf("[%s] %s", text, output))
-			wailsruntime.EventsEmit(a.ctx, "internal-tool-message", fmt.Sprintf("Command Output: %s", output))
+			a.logChat("tool-output", output)
+			wailsruntime.EventsEmit(a.ctx, "internal-tool-message", output)
 			wailsruntime.EventsEmit(a.ctx, "done", "") // Signal UI that we're done processing command
 			return nil
 		}
@@ -396,17 +396,18 @@ func (a *App) handleToolCalls(response string) {
 				toolLower := strings.ToLower(tool)
 
 				if toolLower == "done" {
+					a.isCodeActive = false
 					wailsruntime.EventsEmit(a.ctx, "code-finished", "AI has completed the task.")
 					return
 				}
 
 				output := a.ExecuteTool(cmd, true)
-				a.logChat("tool-output", fmt.Sprintf("[%s] %s", cmd, output))
+				a.logChat("tool-output", output)
 
 				// Automatically send output back to AI
 				go func() {
 					if a.isCodeActive {
-						a.processMessage(fmt.Sprintf("(Tool) %s: %s", cmd, output), "", true)
+						a.processMessage(fmt.Sprintf("(Tool) %s", output), "", true)
 					}
 				}()
 				return // Handle one command at a time to keep it sequential
@@ -415,8 +416,11 @@ func (a *App) handleToolCalls(response string) {
 	}
 
 	if !foundCommand {
-		// If no command found, the AI might be done or just chatting.
-		// We signal completion to break the loop.
-		wailsruntime.EventsEmit(a.ctx, "code-finished", "AI finished responding without a tool call.")
+		// If no command found, send feedback back to AI to keep the loop going
+		go func() {
+			if a.isCodeActive {
+				a.processMessage("(Tool) Error no tool called, did you mean note: ? Maybe check todo: ?", "", true)
+			}
+		}()
 	}
 }

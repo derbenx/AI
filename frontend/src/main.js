@@ -468,6 +468,7 @@ async function stopCodeMode() {
     chatInput.disabled = false;
     sendBtn.disabled = false;
     document.getElementById('clear-btn').disabled = false;
+    document.getElementById('code-status').textContent = "Mode: Stopped";
     showNotification("Code mode stopped/finished.");
 }
 

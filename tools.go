@@ -150,6 +150,8 @@ func (a *App) ExecuteTool(command string, isAI bool) string {
 		output = a.toolMkdir(args)
 	case "help":
 		output = a.toolHelp(args, isAI)
+	case "done":
+		output = a.toolDone(args)
 	default:
 		// Try dynamic execution
 		output = a.toolDynamic(toolLower, args)
@@ -406,6 +408,10 @@ func (a *App) toolFWrite(args string) string {
 	}
 
 	var writeErr error
+	if operation != "replace" && operation != "append" {
+		return "Error: fwrite operation must be 'replace' or 'append'. See 'help: fwrite'"
+	}
+
 	if operation == "append" {
 		f, err := os.OpenFile(fullPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
@@ -963,6 +969,13 @@ func (a *App) getBuiltInTools() map[string]string {
 
 func (a *App) getBuiltInToolSyntax() map[string]string {
 	return map[string]string{}
+}
+
+func (a *App) toolDone(args string) string {
+	if args == "" {
+		return "Finished coding."
+	}
+	return args
 }
 
 func (a *App) toolHelp(toolname string, isAI bool) string {

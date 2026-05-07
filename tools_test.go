@@ -24,6 +24,16 @@ func setupTestApp(t *testing.T) (*App, string) {
 	return app, tempDir
 }
 
+func TestToolExists(t *testing.T) {
+	app, _ := setupTestApp(t)
+	tools := []string{"ls", "fread", "fwrite", "rm", "note", "todo", "help", "resume", "done"}
+	for _, tool := range tools {
+		if !app.toolExists(tool) {
+			t.Errorf("Tool %s should exist", tool)
+		}
+	}
+}
+
 func TestToolLS(t *testing.T) {
 	app, tempDir := setupTestApp(t)
 	defer os.RemoveAll(tempDir)
@@ -244,5 +254,37 @@ func TestSplitArgs(t *testing.T) {
 				t.Errorf("For input %q, part %d: expected %q, got %q", tc.input, i, tc.expected[i], result[i])
 			}
 		}
+	}
+}
+
+func TestSanitizeOutput(t *testing.T) {
+	app := &App{
+		config: Config{
+			ProjectFolder: "/home/user/project",
+		},
+	}
+
+	input := "/home/user/project/file.txt"
+	expected := "./file.txt"
+	output := app.sanitizeOutput(input)
+	if output != expected {
+		t.Errorf("Expected %s, got %s", expected, output)
+	}
+}
+
+func TestToolNote(t *testing.T) {
+	app, _ := setupTestApp(t)
+
+	// Test empty notes
+	output := app.ExecuteTool("note: 0", false)
+	if output != "No notes found." {
+		t.Errorf("Expected 'No notes found.', got: %s", output)
+	}
+
+	// Test writing note
+	app.ExecuteTool("note: 1 first note", false)
+	output = app.ExecuteTool("note: 0", false)
+	if !strings.Contains(output, "first note") {
+		t.Errorf("Expected 'first note', got: %s", output)
 	}
 }
