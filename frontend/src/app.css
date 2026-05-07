@@ -193,6 +193,31 @@ input[type="text"], input[type="number"], select, textarea {
     background-color: #2d2d2d;
 }
 
+.message pre {
+    background-color: #000;
+    padding: 10px;
+    border-radius: 4px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    border: 1px solid #444;
+    margin: 10px 0;
+}
+
+.message code {
+    background-color: #111;
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: monospace;
+    color: #44ff44;
+}
+
+.message pre code {
+    background-color: transparent;
+    padding: 0;
+    color: #e0e0e0;
+}
+
 .notification {
     position: fixed;
     bottom: 20px;

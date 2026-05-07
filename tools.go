@@ -187,7 +187,7 @@ func (a *App) toolFRead(args string) string {
 	}
 
 	if info.Size() > 2*1024*1024 && operation == "" {
-		return fmt.Sprintf("This file is %.2fMB, use head or tail. Example: 'fread: %s head 50'", float64(info.Size())/(1024*1024), path)
+		return fmt.Sprintf("This file is %.2fMB, use head or tail. Example: `fread: %s head 50`", float64(info.Size())/(1024*1024), path)
 	}
 
 	if operation == "head" || operation == "tail" {
@@ -257,7 +257,9 @@ func (a *App) toolFRead(args string) string {
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}
-	return string(content)
+	// Escape backticks to prevent breaking the markdown block
+	safeContent := strings.ReplaceAll(string(content), "```", "` ` `")
+	return fmt.Sprintf("File content of `%s`:\n```\n%s\n```", path, safeContent)
 }
 
 func (a *App) splitArgs(args string) []string {
@@ -382,9 +384,9 @@ func (a *App) toolFWrite(args string) string {
 	if operation == "write" {
 		opDone = "written"
 	}
-	successMsg := fmt.Sprintf("File '%s' %s successfully.", path, opDone)
+	successMsg := fmt.Sprintf("File `%s` %s successfully.", path, opDone)
 	if backedUp {
-		successMsg += fmt.Sprintf(" (Backup saved to %s)", backupPath)
+		successMsg += fmt.Sprintf(" (Backup saved to `%s`)", backupPath)
 	}
 	return successMsg
 }
@@ -422,9 +424,9 @@ func (a *App) toolRM(path string) string {
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}
-	msg := fmt.Sprintf("File '%s' removed successfully.", path)
+	msg := fmt.Sprintf("File `%s` removed successfully.", path)
 	if backedUp {
-		msg += fmt.Sprintf(" (Backup saved to %s)", backupPath)
+		msg += fmt.Sprintf(" (Backup saved to `%s`)", backupPath)
 	}
 	return msg
 }
@@ -549,7 +551,7 @@ func (a *App) toolLines(path string) string {
 	for scanner.Scan() {
 		count++
 	}
-	return fmt.Sprintf("%d. You can read it with fread: %s", count, path)
+	return fmt.Sprintf("%d. You can read it with `fread: %s`", count, path)
 }
 
 func (a *App) toolFCopy(args string) string {
@@ -595,7 +597,7 @@ func (a *App) toolMkdir(path string) string {
 	if err != nil {
 		return fmt.Sprintf("Error: %v", err)
 	}
-	return fmt.Sprintf("Directory '%s' created. Use ls: %s to see it.", path, path)
+	return fmt.Sprintf("Directory `%s` created. Use `ls: %s` to see it.", path, path)
 }
 
 func (a *App) toolTodo(args string) string {
@@ -720,7 +722,7 @@ func (a *App) toolURL(url string, textOnly bool) string {
 		finalText := strings.TrimSpace(sb.String())
 		relPath := filepath.ToSlash(filepath.Join("!url", fileName+".txt"))
 		os.WriteFile(fullPath+".txt", []byte(finalText), 0644)
-		return fmt.Sprintf("Saved text to: %s. You can read it with fread: %s", relPath, relPath)
+		return fmt.Sprintf("Saved text to: `%s`. You can read it with `fread: %s`", relPath, relPath)
 	}
 
 	out, err := os.Create(fullPath)
@@ -735,7 +737,7 @@ func (a *App) toolURL(url string, textOnly bool) string {
 	}
 
 	relPath := filepath.ToSlash(filepath.Join("!url", fileName))
-	return fmt.Sprintf("Saved to: %s. You can read it with fread: %s", relPath, relPath)
+	return fmt.Sprintf("Saved to: `%s`. You can read it with `fread: %s`", relPath, relPath)
 }
 
 var currentProcess *exec.Cmd

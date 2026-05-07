@@ -54,8 +54,8 @@ func TestToolFWriteAndBackup(t *testing.T) {
 
 	// Second write (should trigger backup)
 	output := app.ExecuteTool("fwrite: " + filePath + " write updated content", false)
-	if !strings.Contains(output, "(Backup saved to !trash/") {
-		t.Errorf("Expected backup message, got: %s", output)
+	if !strings.Contains(output, "(Backup saved to `!trash/") {
+		t.Errorf("Expected backup message with backticks, got: %s", output)
 	}
 
 	// Verify backup exists
@@ -84,8 +84,8 @@ func TestToolFReadLargeFile(t *testing.T) {
 	os.WriteFile(fullPath, data, 0644)
 
 	output := app.ExecuteTool("fread: " + filePath, false)
-	if !strings.Contains(output, "use head or tail") || !strings.Contains(output, "Example: 'fread:") {
-		t.Errorf("Expected large file warning with example, got: %s", output)
+	if !strings.Contains(output, "use head or tail") || !strings.Contains(output, "Example: `fread:") {
+		t.Errorf("Expected large file warning with backticked example, got: %s", output)
 	}
 }
 
@@ -94,8 +94,8 @@ func TestToolMkdirAndSuggestion(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	output := app.ExecuteTool("mkdir: newdir", false)
-	if !strings.Contains(output, "Use ls: newdir to see it.") {
-		t.Errorf("Expected suggestion in output, got: %s", output)
+	if !strings.Contains(output, "Use `ls: newdir` to see it.") {
+		t.Errorf("Expected backticked suggestion in output, got: %s", output)
 	}
 }
 
@@ -107,8 +107,8 @@ func TestToolLinesAndSuggestion(t *testing.T) {
 	os.WriteFile(filepath.Join(tempDir, filePath), []byte("line1\nline2\n"), 0644)
 
 	output := app.ExecuteTool("lines: " + filePath, false)
-	if !strings.Contains(output, "You can read it with fread: "+filePath) {
-		t.Errorf("Expected suggestion in output, got: %s", output)
+	if !strings.Contains(output, "You can read it with `fread: "+filePath+"`") {
+		t.Errorf("Expected backticked suggestion in output, got: %s", output)
 	}
 }
 
@@ -120,8 +120,8 @@ func TestToolRMAndBackup(t *testing.T) {
 	os.WriteFile(filepath.Join(tempDir, filePath), []byte("to be deleted"), 0644)
 
 	output := app.ExecuteTool("rm: " + filePath, false)
-	if !strings.Contains(output, "removed successfully") || !strings.Contains(output, "(Backup saved to !trash/") {
-		t.Errorf("Expected success message with backup info, got: %s", output)
+	if !strings.Contains(output, "removed successfully") || !strings.Contains(output, "(Backup saved to `!trash/") {
+		t.Errorf("Expected success message with backticked backup info, got: %s", output)
 	}
 
 	if _, err := os.Stat(filepath.Join(tempDir, filePath)); !os.IsNotExist(err) {
@@ -154,8 +154,8 @@ func TestToolPathWithBackslash(t *testing.T) {
 
 	// Simulate Windows-style path input
 	output := app.ExecuteTool(`fread: subdir\file.txt`, false)
-	if output != "test content" {
-		t.Errorf("Expected 'test content', got: %s", output)
+	if !strings.Contains(output, "test content") {
+		t.Errorf("Expected 'test content' in output, got: %s", output)
 	}
 }
 
