@@ -1,13 +1,13 @@
 help command, lists info about other tools/commands.
  Usage; help: [tool]
  Example; help: (lists all tool names)
- Example; help: note (describes how to use note)
+ Example; help: memories (describes how to use memories)
 
-note command, reads a persistent technical note.
- Usage; note: [1-999] {note}
- Example; note: 0 (Read all notes)
- Example; note: 1 (Read note #1)
- Example; note: 2 I'd rather be at the beach (saves note to slot #2)
+memories command, reads a persistent technical note.
+ Usage; memories: [1-999] {note}
+ Example; memories: 0 (Read all notes)
+ Example; memories: 1 (Read note #1)
+ Example; memories: 2 I'd rather be at the beach (saves note to slot #2)
 
 todo command, Manages a user made to-do list as a checklist
  Usage; todo: [1-999] {done/reset}
@@ -15,40 +15,40 @@ todo command, Manages a user made to-do list as a checklist
  Example; todo: 1 (shows task #1)
  Example; todo: 2 done (appends [done] to the end of line #2)
  Example; todo: 3 reset (removes [done] from the end of line #3)
- 
+
 lines command, number of lines in a file. Relative path only.
  Usage; lines: [file]
  Example; lines: url/web.htm
- 
+
 rm command, remove/delete a file. Relative path only.
  Usage; rm: [file]
- 
+
 ls command, list files in specified folder. Relative path only.
  Usage; ls: [file]
- 
-fread command: Reads a file on disk. Relative path only.
- Usage; fread: [head/tail] [lines/bytes/all] [file]
- Example; fread: head 10 pop.go (Reads the top 10 lines of the file).
- Example; fread: tail 100b hop/pop.go (Reads the last 100 bytes of the file).
- 
-fwrite command, list files in specified folder. Relative path only.
- Usage; fwrite: [replace/append] [file] [content]
- Example; fwrite: replace go.json {stuff:ok}
- Example; fwrite: append "hi lo/go.json" {stuff:no}
- 
-fcopy command, Copy a file. Relative path only.
- Usage; fcopy: [orgfile] [destfile]
- 
+
+fileread command: Reads a file on disk. Relative path only.
+ Usage; fileread: [head/tail] [lines/bytes/all] [file]
+ Example; fileread: head 10 pop.go (Reads the top 10 lines of the file).
+ Example; fileread: tail 100b hop/pop.go (Reads the last 100 bytes of the file).
+
+filewrite command, list files in specified folder. Relative path only.
+ Usage; filewrite: [replace/append] [file] [content]
+ Example; filewrite: replace go.json {stuff:ok}
+ Example; filewrite: append "hi lo/go.json" {stuff:no}
+
+filecopy command, Copy a file. Relative path only.
+ Usage; filecopy: [orgfile] [destfile]
+
 mkdir command,  Make a folder. Relative path only.
  Usage; mkdir: [folder]
- 
+
 resume command, resume code session, user use only
  Usage; resume: [message]
 
 done command, you are done coding.
  Usage; done: [msg]
  Example; done: I have finished the todo list!
- 
+
 build command, runs a preset build command. returns log location to check for errors.
  Usage; build:
 
@@ -57,10 +57,9 @@ run command, runs a preset run command. returns log location to check for errors
 
 kill command, runs a preset kill command for running program.
  Usage; kill:
- 
+
 url command, downloads full HTML from url.
  Usage; url: [fullurl]
 
 urltxt command, downloads full HTML and strips html tags.
  Usage; urltxt: [fullurl]
- 

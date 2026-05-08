@@ -120,15 +120,15 @@ func (a *App) ExecuteTool(command string, isAI bool) string {
 
 	var output string
 	switch toolLower {
-	case "fread":
+	case "fileread":
 		output = a.toolFRead(args)
-	case "fwrite":
+	case "filewrite":
 		output = a.toolFWrite(args)
 	case "rm":
 		output = a.toolRM(args)
 	case "ls":
 		output = a.toolLS(args)
-	case "note":
+	case "memories":
 		output = a.toolNote(args)
 	case "todo":
 		output = a.toolTodo(args)
@@ -144,7 +144,7 @@ func (a *App) ExecuteTool(command string, isAI bool) string {
 		output = a.toolKill()
 	case "lines":
 		output = a.toolLines(args)
-	case "fcopy":
+	case "filecopy":
 		output = a.toolFCopy(args)
 	case "mkdir":
 		output = a.toolMkdir(args)
@@ -176,7 +176,7 @@ func (a *App) securePath(path string) (string, error) {
 func (a *App) toolFRead(args string) string {
 	parts := a.splitArgs(args)
 	if len(parts) == 0 {
-		return "Error: fread requires arguments. See 'help: fread'"
+		return "Error: fileread requires arguments. See 'help: fileread'"
 	}
 
 	var operation, mode, path string
@@ -216,7 +216,7 @@ func (a *App) toolFRead(args string) string {
 	}
 
 	if operation == "all" && info.Size() > 2*1024*1024 {
-		return fmt.Sprintf("This file is %.2fMB, use head or tail. Example: `fread: head 50 %s`", float64(info.Size())/(1024*1024), path)
+		return fmt.Sprintf("This file is %.2fMB, use head or tail. Example: `fileread: head 50 %s`", float64(info.Size())/(1024*1024), path)
 	}
 
 	file, err := os.Open(fullPath)
@@ -355,7 +355,7 @@ func (a *App) splitArgs(args string) []string {
 func (a *App) toolFWrite(args string) string {
 	parts := a.splitArgs(args)
 	if len(parts) < 3 {
-		return "Error: fwrite requires <operation: replace|append> <path> <content>. See 'help: fwrite'"
+		return "Error: filewrite requires <operation: replace|append> <path> <content>. See 'help: filewrite'"
 	}
 	operation := strings.ToLower(parts[0])
 	path := parts[1]
@@ -409,7 +409,7 @@ func (a *App) toolFWrite(args string) string {
 
 	var writeErr error
 	if operation != "replace" && operation != "append" {
-		return "Error: fwrite operation must be 'replace' or 'append'. See 'help: fwrite'"
+		return "Error: filewrite operation must be 'replace' or 'append'. See 'help: filewrite'"
 	}
 
 	if operation == "append" {
@@ -566,7 +566,7 @@ func (a *App) toolNote(args string) string {
 
 	id, err := strconv.Atoi(parts[0])
 	if err != nil || id < 1 || id > 1000 {
-		return fmt.Sprintf("Error: Invalid note ID. Note ID must be between 1 and 1000. See 'help: note'")
+		return fmt.Sprintf("Error: Invalid memory ID. ID must be between 1 and 1000. See 'help: memories'")
 	}
 
 	if len(parts) > 1 {
@@ -614,13 +614,13 @@ func (a *App) toolLines(path string) string {
 	for scanner.Scan() {
 		count++
 	}
-	return fmt.Sprintf("%d. You can read it with `fread: %s`", count, path)
+	return fmt.Sprintf("%d. You can read it with `fileread: %s`", count, path)
 }
 
 func (a *App) toolFCopy(args string) string {
 	parts := a.splitArgs(args)
 	if len(parts) < 2 {
-		return "Error: fcopy requires <src> <dst>"
+		return "Error: filecopy requires <src> <dst>"
 	}
 	src, err := a.securePath(parts[0])
 	if err != nil {
@@ -801,7 +801,7 @@ func (a *App) toolURL(url string, textOnly bool) string {
 		finalText := strings.TrimSpace(sb.String())
 		relPath := filepath.ToSlash(filepath.Join("!url", fileName+".txt"))
 		os.WriteFile(fullPath+".txt", []byte(finalText), 0644)
-		return fmt.Sprintf("Saved text to: `%s`. You can read it with `fread: %s`", relPath, relPath)
+		return fmt.Sprintf("Saved text to: `%s`. You can read it with `fileread: %s`", relPath, relPath)
 	}
 
 	out, err := os.Create(fullPath)
@@ -816,7 +816,7 @@ func (a *App) toolURL(url string, textOnly bool) string {
 	}
 
 	relPath := filepath.ToSlash(filepath.Join("!url", fileName))
-	return fmt.Sprintf("Saved to: `%s`. You can read it with `fread: %s`", relPath, relPath)
+	return fmt.Sprintf("Saved to: `%s`. You can read it with `fileread: %s`", relPath, relPath)
 }
 
 var currentProcess *exec.Cmd
@@ -846,10 +846,10 @@ func (a *App) toolBuild() string {
 
 	err = cmd.Run()
 	if err != nil {
-		return fmt.Sprintf("Build failed: %v. To see errors, use: fread: build.log", err)
+		return fmt.Sprintf("Build failed: %v. To see errors, use: fileread: build.log", err)
 	}
 
-	return "Done. To see errors, use: fread: build.log"
+	return "Done. To see errors, use: fileread: build.log"
 }
 
 func (a *App) toolRun() string {
@@ -896,7 +896,7 @@ func (a *App) toolRun() string {
 	// Wait a few seconds to collect initial data
 	time.Sleep(3 * time.Second)
 
-	return "Done. To see errors, use: fread: run.log"
+	return "Done. To see errors, use: fileread: run.log"
 }
 
 func (a *App) toolKill() string {
@@ -947,23 +947,23 @@ func (a *App) toolDynamic(tool, args string) string {
 
 func (a *App) getBuiltInTools() map[string]string {
 	return map[string]string{
-		"fread":  "Reads a file on disk. Relative path only.\n Usage; fread: [head/tail] [lines/bytes/all] [file]\n Example; fread: head 10 pop.go (Reads the top 10 lines of the file).\n Example; fread: tail 100b hop/pop.go (Reads the last 100 bytes of the file).",
-		"fwrite": "modifies or overwrites a file. Relative path only.\n Usage; fwrite: [replace/append] [file] [content]\n Example; fwrite: replace go.json {stuff:ok}\n Example; fwrite: append \"hi lo/go.json\" {stuff:no}",
-		"rm":     "remove/delete a file. Relative path only.\n Usage; rm: [file]",
-		"ls":     "list files in specified folder. Relative path only.\n Usage; ls: [file]",
-		"lines":  "number of lines in a file. Relative path only.\n Usage; lines: [file]\n Example; lines: url/web.htm",
-		"fcopy":  "Copy a file. Relative path only.\n Usage; fcopy: [orgfile] [destfile]",
-		"mkdir":  "Make a folder. Relative path only.\n Usage; mkdir: [folder]",
-		"note":   "reads a persistent technical note.\n Usage; note: [1-999] {note}\n Example; note: 0 (Read all notes)\n Example; note: 1 (Read note #1)\n Example; note: 2 I'd rather be at the beach (saves note to slot #2)",
-		"todo":   "Manages a user made to-do list as a checklist\n Usage; todo: [1-999] {done/reset}\n Example; todo: 0 (shows entire list)\n Example; todo: 1 (shows task #1)\n Example; todo: 2 done (appends [done] to the end of line #2)\n Example; todo: 3 reset (removes [done] from the end of line #3)",
-		"url":    "downloads full HTML from url.\n Usage; url: [fullurl]",
-		"urltxt": "downloads full HTML and strips html tags.\n Usage; urltxt: [fullurl]",
-		"build":  "runs a preset build command. returns log location to check for errors.\n Usage; build:",
-		"run":    "runs a preset run command. returns log location to check for errors.\n Usage; run:",
-		"kill":   "runs a preset kill command for running program.\n Usage; kill:",
-		"help":   "lists info about other tools/commands.\n Usage; help: [tool]\n Example; help: (lists all tool names)\n Example; help: note (describes how to use note)",
-		"resume": "resume code session, user use only\n Usage; resume: [message]",
-		"done":   "you are done coding.\n Usage; done: [msg]\n Example; done: I have finished the todo list!",
+		"fileread":  "Reads a file on disk. Relative path only.\n Usage; fileread: [head/tail] [lines/bytes/all] [file]\n Example; fileread: head 10 pop.go (Reads the top 10 lines of the file).\n Example; fileread: tail 100b hop/pop.go (Reads the last 100 bytes of the file).",
+		"filewrite": "modifies or overwrites a file. Relative path only.\n Usage; filewrite: [replace/append] [file] [content]\n Example; filewrite: replace go.json {stuff:ok}\n Example; filewrite: append \"hi lo/go.json\" {stuff:no}",
+		"rm":        "remove/delete a file. Relative path only.\n Usage; rm: [file]",
+		"ls":        "list files in specified folder. Relative path only.\n Usage; ls: [file]",
+		"lines":     "number of lines in a file. Relative path only.\n Usage; lines: [file]\n Example; lines: url/web.htm",
+		"filecopy":  "Copy a file. Relative path only.\n Usage; filecopy: [orgfile] [destfile]",
+		"mkdir":     "Make a folder. Relative path only.\n Usage; mkdir: [folder]",
+		"memories":  "reads a persistent technical note.\n Usage; memories: [1-999] {note}\n Example; memories: 0 (Read all notes)\n Example; memories: 1 (Read note #1)\n Example; memories: 2 I'd rather be at the beach (saves note to slot #2)",
+		"todo":      "Manages a user made to-do list as a checklist\n Usage; todo: [1-999] {done/reset}\n Example; todo: 0 (shows entire list)\n Example; todo: 1 (shows task #1)\n Example; todo: 2 done (appends [done] to the end of line #2)\n Example; todo: 3 reset (removes [done] from the end of line #3)",
+		"url":       "downloads full HTML from url.\n Usage; url: [fullurl]",
+		"urltxt":    "downloads full HTML and strips html tags.\n Usage; urltxt: [fullurl]",
+		"build":     "runs a preset build command. returns log location to check for errors.\n Usage; build:",
+		"run":       "runs a preset run command. returns log location to check for errors.\n Usage; run:",
+		"kill":      "runs a preset kill command for running program.\n Usage; kill:",
+		"help":      "lists info about other tools/commands.\n Usage; help: [tool]\n Example; help: (lists all tool names)\n Example; help: memories (describes how to use memories)",
+		"resume":    "resume code session, user use only\n Usage; resume: [message]",
+		"done":      "you are done coding.\n Usage; done: [msg]\n Example; done: I have finished the todo list!",
 	}
 }
 
@@ -983,6 +983,31 @@ func (a *App) toolHelp(toolname string, isAI bool) string {
 	builtIns := a.getBuiltInTools()
 
 	toolname = strings.TrimSuffix(strings.TrimSpace(toolname), ":")
+
+	if toolname == "brief_list" {
+		var lines []string
+		for name, desc := range builtIns {
+			if isAI && !a.isToolAllowed(name) {
+				continue
+			}
+			summary := ""
+			firstLine := strings.Split(desc, "\n")[0]
+			summary = strings.TrimSpace(strings.TrimSuffix(firstLine, "."))
+			lines = append(lines, fmt.Sprintf("%s: (%s)", name, summary))
+		}
+		tools, _ := a.ListAvailableTools()
+		for _, t := range tools {
+			if _, exists := builtIns[t.Name]; exists {
+				continue
+			}
+			if isAI && !a.isToolAllowed(t.Name) {
+				continue
+			}
+			summary := strings.TrimSpace(strings.Split(t.Description, "\n")[0])
+			lines = append(lines, fmt.Sprintf("%s: (%s)", t.Name, summary))
+		}
+		return strings.Join(lines, "\n")
+	}
 
 	if toolname != "" {
 		if desc, ok := builtIns[toolname]; ok {
@@ -1042,8 +1067,9 @@ func (a *App) toolHelp(toolname string, isAI bool) string {
 
 func (a *App) isToolAllowed(tool string) bool {
 	tool = strings.ToLower(tool)
-	// help, todo, note and done cannot be disabled for AI.
-	if tool == "help" || tool == "todo" || tool == "note" || tool == "done" {
+	// help, todo and done cannot be disabled for AI.
+	// memories (formerly note) can now be disabled as per user request.
+	if tool == "help" || tool == "todo" || tool == "done" {
 		return true
 	}
 	// resume is user only.

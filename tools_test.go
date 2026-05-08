@@ -17,7 +17,7 @@ func setupTestApp(t *testing.T) (*App, string) {
 		config: Config{
 			ProjectFolder: tempDir,
 			AllowedTools: []string{
-				"ls", "fwrite", "fread", "rm", "note", "todo", "lines", "fcopy", "mkdir", "url", "urltxt", "help",
+				"ls", "filewrite", "fileread", "rm", "memories", "todo", "lines", "filecopy", "mkdir", "url", "urltxt", "help",
 			},
 		},
 	}
@@ -26,7 +26,7 @@ func setupTestApp(t *testing.T) (*App, string) {
 
 func TestToolExists(t *testing.T) {
 	app, _ := setupTestApp(t)
-	tools := []string{"ls", "fread", "fwrite", "rm", "note", "todo", "help", "resume", "done"}
+	tools := []string{"ls", "fileread", "filewrite", "rm", "memories", "todo", "help", "resume", "done"}
 	for _, tool := range tools {
 		if !app.toolExists(tool) {
 			t.Errorf("Tool %s should exist", tool)
@@ -58,10 +58,10 @@ func TestToolFWriteAndBackup(t *testing.T) {
 	fullPath := filepath.Join(tempDir, filePath)
 
 	// First write
-	app.ExecuteTool("fwrite: replace " + filePath + " initial content", false)
+	app.ExecuteTool("filewrite: replace " + filePath + " initial content", false)
 
 	// Second write (should trigger backup)
-	output := app.ExecuteTool("fwrite: replace " + filePath + " updated content", false)
+	output := app.ExecuteTool("filewrite: replace " + filePath + " updated content", false)
 	if !strings.Contains(output, "(Backup saved to `!trash/") {
 		t.Errorf("Expected backup message with backticks, got: %s", output)
 	}
@@ -88,31 +88,31 @@ func TestToolFRead(t *testing.T) {
 	os.WriteFile(filepath.Join(tempDir, filePath), []byte("line1\nline2\nline3\nline4\nline5"), 0644)
 
 	// Test head lines
-	output := app.ExecuteTool("fread: head 2 " + filePath, false)
+	output := app.ExecuteTool("fileread: head 2 " + filePath, false)
 	if output != "line1\nline2" {
 		t.Errorf("Expected 'line1\nline2', got: %q", output)
 	}
 
 	// Test tail lines
-	output = app.ExecuteTool("fread: tail 2 " + filePath, false)
+	output = app.ExecuteTool("fileread: tail 2 " + filePath, false)
 	if output != "line4\nline5" {
 		t.Errorf("Expected 'line4\nline5', got: %q", output)
 	}
 
 	// Test head bytes
-	output = app.ExecuteTool("fread: head 5b " + filePath, false)
+	output = app.ExecuteTool("fileread: head 5b " + filePath, false)
 	if output != "line1" {
 		t.Errorf("Expected 'line1', got: %q", output)
 	}
 
 	// Test tail bytes
-	output = app.ExecuteTool("fread: tail 5b " + filePath, false)
+	output = app.ExecuteTool("fileread: tail 5b " + filePath, false)
 	if output != "line5" {
 		t.Errorf("Expected 'line5', got: %q", output)
 	}
 
 	// Test all
-	output = app.ExecuteTool("fread: all " + filePath, false)
+	output = app.ExecuteTool("fileread: all " + filePath, false)
 	if !strings.Contains(output, "line1\nline2\nline3\nline4\nline5") {
 		t.Errorf("Expected all content, got: %s", output)
 	}
@@ -129,8 +129,8 @@ func TestToolFReadLargeFile(t *testing.T) {
 	data := make([]byte, 2*1024*1024 + 1024)
 	os.WriteFile(fullPath, data, 0644)
 
-	output := app.ExecuteTool("fread: all " + filePath, false)
-	if !strings.Contains(output, "use head or tail") || !strings.Contains(output, "Example: `fread:") {
+	output := app.ExecuteTool("fileread: all " + filePath, false)
+	if !strings.Contains(output, "use head or tail") || !strings.Contains(output, "Example: `fileread:") {
 		t.Errorf("Expected large file warning with backticked example, got: %s", output)
 	}
 }
@@ -153,7 +153,7 @@ func TestToolLinesAndSuggestion(t *testing.T) {
 	os.WriteFile(filepath.Join(tempDir, filePath), []byte("line1\nline2\n"), 0644)
 
 	output := app.ExecuteTool("lines: " + filePath, false)
-	if !strings.Contains(output, "You can read it with `fread: "+filePath+"`") {
+	if !strings.Contains(output, "You can read it with `fileread: "+filePath+"`") {
 		t.Errorf("Expected backticked suggestion in output, got: %s", output)
 	}
 }
@@ -178,7 +178,7 @@ func TestToolRMAndBackup(t *testing.T) {
 func TestToolHelp(t *testing.T) {
 	app, _ := setupTestApp(t)
 
-	output := app.ExecuteTool("help: fwrite", false)
+	output := app.ExecuteTool("help: filewrite", false)
 	if !strings.Contains(output, "replace/append") {
 		t.Errorf("Expected new help format, got: %s", output)
 	}
@@ -192,7 +192,7 @@ func TestToolPathWithBackslash(t *testing.T) {
 	os.WriteFile(filepath.Join(tempDir, "subdir", "file.txt"), []byte("test content"), 0644)
 
 	// Simulate Windows-style path input
-	output := app.ExecuteTool(`fread: all subdir\file.txt`, false)
+	output := app.ExecuteTool(`fileread: all subdir\file.txt`, false)
 	if !strings.Contains(output, "test content") {
 		t.Errorf("Expected 'test content' in output, got: %s", output)
 	}
@@ -220,7 +220,7 @@ func TestToolFWriteQuotedPath(t *testing.T) {
     defer os.RemoveAll(tempDir)
 
     path := "path with spaces.txt"
-    app.ExecuteTool(`fwrite: replace "` + path + `" some content`, false)
+    app.ExecuteTool(`filewrite: replace "` + path + `" some content`, false)
 
     content, _ := os.ReadFile(filepath.Join(tempDir, path))
     if string(content) != "some content" {
@@ -272,19 +272,19 @@ func TestSanitizeOutput(t *testing.T) {
 	}
 }
 
-func TestToolNote(t *testing.T) {
+func TestToolMemories(t *testing.T) {
 	app, _ := setupTestApp(t)
 
-	// Test empty notes
-	output := app.ExecuteTool("note: 0", false)
+	// Test empty memories
+	output := app.ExecuteTool("memories: 0", false)
 	if output != "No notes found." {
 		t.Errorf("Expected 'No notes found.', got: %s", output)
 	}
 
-	// Test writing note
-	app.ExecuteTool("note: 1 first note", false)
-	output = app.ExecuteTool("note: 0", false)
-	if !strings.Contains(output, "first note") {
-		t.Errorf("Expected 'first note', got: %s", output)
+	// Test writing memory
+	app.ExecuteTool("memories: 1 first memory", false)
+	output = app.ExecuteTool("memories: 0", false)
+	if !strings.Contains(output, "first memory") {
+		t.Errorf("Expected 'first memory', got: %s", output)
 	}
 }

@@ -342,7 +342,7 @@ async function refreshTools() {
         cb.value = t.name;
         cb.id = `tool-${t.name}`;
 
-        const roTools = ['help', 'todo', 'note', 'done', 'resume'];
+        const roTools = ['help', 'todo', 'done', 'resume'];
         if (roTools.includes(t.name)) {
             cb.disabled = true;
             if (t.name === 'resume') {

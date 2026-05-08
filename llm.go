@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"os"
 	"os/exec"
@@ -302,7 +303,7 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 		// Use Code Prompt as System Prompt to ensure persistence
 		systemPrompt = a.config.Personality + "\n\n" + a.config.CodePrompt
 		systemPrompt = strings.ReplaceAll(systemPrompt, "[qa]", fmt.Sprintf("%d", a.config.MemoryLimit))
-		systemPrompt = strings.ReplaceAll(systemPrompt, "[tools]", a.toolHelp("", true))
+		systemPrompt = strings.ReplaceAll(systemPrompt, "[tools]", a.toolHelp("brief_list", true))
 		// Only emit once at the very start of a session
 		if !strings.HasPrefix(text, "(Tool) ") {
 			wailsruntime.EventsEmit(a.ctx, "system-prompt-display", systemPrompt)
@@ -415,6 +416,20 @@ func (a *App) handleToolCalls(response string) {
 				feedback := fmt.Sprintf("(Tool) %s", output)
 				if a.repeatCount >= 3 {
 					feedback += "\n\nAre you stuck? use \"help:\" to list all commands or \"todo:\" to list things to do."
+					if a.repeatCount > 3 {
+						// Suggest random tools
+						toolsList := a.toolHelp("brief_list", true)
+						lines := strings.Split(toolsList, "\n")
+						if len(lines) > 0 {
+							rand.Seed(time.Now().UnixNano())
+							rand.Shuffle(len(lines), func(i, j int) { lines[i], lines[j] = lines[j], lines[i] })
+							n := 3
+							if len(lines) < n {
+								n = len(lines)
+							}
+							feedback += "\nMaybe try one of these tools?\n" + strings.Join(lines[:n], "\n")
+						}
+					}
 				}
 
 				// Automatically send output back to AI
