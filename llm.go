@@ -415,7 +415,7 @@ func (a *App) handleToolCalls(response string) {
 
 				feedback := fmt.Sprintf("(Tool) %s", output)
 				if a.repeatCount >= 3 {
-					feedback += "\n\nAre you stuck? use \"help:\" to list all commands or \"todo:\" to list things to do."
+					feedback += "\n\nStop repeating yourself and use the \"help:\" command!"
 					if a.repeatCount > 3 {
 						// Suggest random tools
 						toolsList := a.toolHelp("brief_list", true)
@@ -447,7 +447,7 @@ func (a *App) handleToolCalls(response string) {
 		// If no command found, send feedback back to AI to keep the loop going
 		go func() {
 			if a.isCodeActive {
-				a.processMessage("(Tool) Error no tool called, did you mean note: ? Maybe check todo: ?", "", true)
+				a.processMessage("(Tool) Error no tool called, did you mean help: ? Maybe check todo: ?", "", true)
 			}
 		}()
 	}

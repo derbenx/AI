@@ -105,7 +105,17 @@ function appendMessage(role, content) {
         breaks: true,
         gfm: true
     });
-    div.innerHTML = marked.parse(label + content);
+
+    let displayContent = label + content;
+    if (role === 'ai') {
+        displayContent = displayContent.replace(/<think>([\s\S]*?)<\/think>/g, '*(thinking) $1*');
+        // Handle unclosed think tag during streaming
+        if (displayContent.includes('<think>') && !displayContent.includes('</think>')) {
+            displayContent = displayContent.replace('<think>', '*(thinking) ') + '*';
+        }
+    }
+
+    div.innerHTML = marked.parse(displayContent);
 
     // Conditional auto-scroll
     const isAtBottom = chatWindow.scrollHeight - chatWindow.scrollTop <= chatWindow.clientHeight + 50;
@@ -133,7 +143,14 @@ EventsOn('token', (token) => {
 
     const isAtBottom = chatWindow.scrollHeight - chatWindow.scrollTop <= chatWindow.clientHeight + 50;
 
-    currentAiMsgDiv.innerHTML = marked.parse("(AI) " + currentAiContent);
+    let displayContent = "(AI) " + currentAiContent;
+    displayContent = displayContent.replace(/<think>([\s\S]*?)<\/think>/g, '*(thinking) $1*');
+    // Handle unclosed think tag during streaming
+    if (displayContent.includes('<think>') && !displayContent.includes('</think>')) {
+        displayContent = displayContent.replace('<think>', '*(thinking) ') + '*';
+    }
+
+    currentAiMsgDiv.innerHTML = marked.parse(displayContent);
 
     if (isAtBottom) {
         chatWindow.scrollTop = chatWindow.scrollHeight;
