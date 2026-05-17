@@ -11,9 +11,8 @@
     <div id="tabs">
         <button class="tab-btn active" onclick="showTab(this, 'main')">Main</button>
         <button class="tab-btn" onclick="showTab(this, 'code')">Code</button>
-        <button class="tab-btn" onclick="showTab(this, 'tools')">Tools</button>
+        <button class="tab-btn" onclick="showTab(this, 'bots')">AI Bots</button>
         <button class="tab-btn" onclick="showTab(this, 'code-setup')">Code Setup</button>
-        <button class="tab-btn local-only" onclick="showTab(this, 'server')">Server</button>
         <button class="tab-btn" onclick="showTab(this, 'settings')">Settings</button>
     </div>
 
@@ -25,41 +24,49 @@
                 <div id="controls">
                     <button id="send-btn">Send</button>
                     <button id="clear-btn">Clear Chat</button>
+                    <div class="code-controls" style="margin-left: auto; display: flex; gap: 5px; align-items: center;">
+                        <button id="code-start-btn" style="padding: 5px 10px;">Start</button>
+                        <button id="code-stop-btn" style="padding: 5px 10px;">Stop</button>
+                        <button id="code-resume-btn" style="padding: 5px 10px;">Resume</button>
+                        <span id="code-status" style="font-size: 0.8em; font-weight: bold; color: #888; margin-left: 5px;">Mode: Stopped</span>
+                    </div>
                 </div>
             </div>
         </div>
         <div id="resize-handle"></div>
-        <div id="preview-sidebar">
-            <h3>Preview</h3>
-            <div id="drop-zone">
-                <p>Drag & Drop Image or Code file here</p>
-            </div>
-            <div id="preview-content">
-                <img id="image-preview" style="display: none; max-width: 100%;" />
-                <pre id="code-preview" style="display: none;"></pre>
-            </div>
-        </div>
-    </div>
-
-    <div id="server-tab" class="tab-content">
-        <div id="server-container">
-            <div class="setting-group">
-                <label>Server Control: <span id="server-status-tab" style="color: #ff4444;">Stopped</span></label>
-                <div style="display: flex; gap: 10px;">
-                    <button id="start-server-btn">Start Server</button>
-                    <button id="stop-server-btn" style="background-color: #d32f2f;">Stop Server</button>
+        <div id="sidebar-container">
+            <div id="chat-sidebar">
+                <h3>CHAT</h3>
+                <div id="bot-list">
+                    <!-- Bot status items will be here -->
                 </div>
             </div>
-            <div class="setting-group" style="flex: 1; display: flex; flex-direction: column;">
-                <label>Server Output Log:</label>
-                <textarea id="server-log" readonly style="flex: 1; font-family: monospace; font-size: 11px; margin-top: 5px;"></textarea>
-                <button id="clear-log-btn" style="margin-top: 5px; align-self: flex-end; background-color: #444;">Clear Log</button>
+            <div id="preview-sidebar">
+                <h3>Preview</h3>
+                <div id="drop-zone">
+                    <p>Drag & Drop Image or Code file here</p>
+                </div>
+                <div id="preview-content">
+                    <img id="image-preview" style="display: none; max-width: 100%;" />
+                    <pre id="code-preview" style="display: none;"></pre>
+                </div>
             </div>
         </div>
     </div>
 
     <div id="code-tab" class="tab-content">
         <div id="code-container">
+            <div class="setting-group">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <label>Programming Prompt:</label>
+                    <div style="display: flex; gap: 5px;">
+                        <button id="reset-prompt-btn" style="padding: 4px 8px; font-size: 0.8em; background-color: #444;">Reset to Default</button>
+                        <button id="save-prompt-btn" style="padding: 4px 8px; font-size: 0.8em; background-color: #2e7d32;">Save Prompt</button>
+                    </div>
+                </div>
+                <textarea id="code-prompt" style="height: 150px;"></textarea>
+                <small style="color: #888;">[qa] = memory pairs, [tools] = available tools</small>
+            </div>
             <div class="setting-group">
                 <label>User Todo List:</label>
                 <textarea id="todo-list" placeholder="List tasks here..."></textarea>
@@ -68,12 +75,6 @@
                 <label>AI Notes List:</label>
                 <textarea id="ai-notes" placeholder="AI notes will appear here..."></textarea>
             </div>
-            <div class="code-controls">
-                <button id="code-start-btn">Start</button>
-                <button id="code-stop-btn">Stop</button>
-                <button id="code-resume-btn">Resume</button>
-            </div>
-            <div id="code-status" style="margin-top: 10px; font-weight: bold; color: #888;">Mode: Stopped</div>
         </div>
     </div>
 
@@ -106,60 +107,29 @@
         <button id="save-code-setup-btn">Save Code Setup</button>
     </div>
 
-    <div id="tools-tab" class="tab-content">
-        <h2>Tools & Prompt</h2>
-        <div class="setting-group">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <label>Programming Prompt:</label>
-                <button id="reset-prompt-btn" style="padding: 4px 8px; font-size: 0.8em; background-color: #444;">Reset to Default</button>
-            </div>
-            <textarea id="code-prompt" style="height: 200px;"></textarea>
-            <small style="color: #888;">[qa] = memory pairs, [tools] = available tools</small>
+    <div id="bots-tab" class="tab-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h2 style="margin: 0;">AI Bots</h2>
+            <button id="add-bot-btn" style="background-color: #2e7d32;">+ Add Bot</button>
         </div>
-        <div class="setting-group">
-            <label>Enabled Tools:</label>
-            <div id="tools-checkboxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px;">
-                <!-- Dynamically populated -->
-            </div>
+        <div style="margin-bottom: 20px; padding: 10px; background: #333; border-radius: 4px; font-size: 0.85em;">
+            <p style="margin: 0; color: #aaa;"><strong>Gemma 4 / Qwen 2.5 / Jinja Notice:</strong></p>
+            <p style="margin: 5px 0 0; color: #888;">Modern models like Gemma 4 and Qwen 2.5 Coder require the <code>--jinja</code> flag for tool calling to work correctly in llama.cpp.</p>
+            <code style="display: block; margin-top: 5px; color: #44ff44; background: #000; padding: 5px; word-break: break-all;">llama-server.exe --jinja -m ../gguf/gemma-4-E2B-it-Q4_K_M.gguf --mmproj ../clip/mmproj-BF16.gguf --host 192.168.1.1</code>
         </div>
-        <button id="save-tools-btn">Save Tools & Prompt</button>
+        <div id="bots-container">
+            <!-- Dynamically populated -->
+        </div>
+        <button id="save-bots-btn">Save All Bots</button>
     </div>
 
     <div id="settings-tab" class="tab-content">
         <h2>Settings</h2>
         <div class="setting-group">
-            <label>Server Mode:</label>
-            <select id="server-mode">
-                <option value="local">Local (This PC)</option>
-                <option value="remote">Remote (Network)</option>
-            </select>
-        </div>
-        <div class="setting-group remote-only">
-            <label>Server URL:</label>
-            <div style="display: flex; gap: 10px;">
-                <input type="text" id="server-url" placeholder="http://127.0.0.1:8080" style="flex: 1;">
-                <button id="test-connection-btn">Test</button>
+            <label>Enabled Tools:</label>
+            <div id="tools-checkboxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px;">
+                <!-- Dynamically populated -->
             </div>
-            <small id="connection-status" style="margin-top: 5px;"></small>
-            <div style="margin-top: 10px; padding: 10px; background: #333; border-radius: 4px; font-size: 0.85em;">
-                <p style="margin: 0; color: #aaa;"><strong>Gemma 4 / Qwen 2.5 / Jinja Notice:</strong></p>
-                <p style="margin: 5px 0 0; color: #888;">Modern models like Gemma 4 and Qwen 2.5 Coder require the <code>--jinja</code> flag for tool calling to work correctly in llama.cpp.</p>
-                <code style="display: block; margin-top: 5px; color: #44ff44; background: #000; padding: 5px; word-break: break-all;">llama-server.exe --jinja -m ../gguf/gemma-4-E2B-it-Q4_K_M.gguf --mmproj ../clip/mmproj-BF16.gguf --host 192.168.1.1</code>
-            </div>
-        </div>
-        <div class="setting-group local-only">
-            <label>Model (gguf/):</label>
-            <select id="model-select"></select>
-        </div>
-        <div class="setting-group local-only">
-            <label>Clip (clip/):</label>
-            <select id="clip-select">
-                <option value="">None</option>
-            </select>
-        </div>
-        <div class="setting-group">
-            <label>Personality:</label>
-            <textarea id="personality-input"></textarea>
         </div>
         <div class="setting-group">
             <label>Memory Limit (Q/A pairs):</label>
@@ -174,13 +144,6 @@
             <label>
                 <input type="checkbox" id="debug-log"> Enable Debug Log
             </label>
-        </div>
-        <div class="setting-group local-only">
-            <label>GPU Layers (Balanced: <span id="balanced-recommend">0</span>):</label>
-            <input type="number" id="gpu-layers" min="0" max="100">
-            <small style="color: #888; font-size: 0.8em; margin-top: 4px;">
-                Note: Layers not offloaded to GPU will automatically run on your CPU (Hybrid Mode).
-            </small>
         </div>
         <div id="system-specs" style="display: none;">
             <h3>System Specs</h3>

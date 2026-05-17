@@ -6,13 +6,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand"
 	"net/http"
 	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
@@ -39,9 +35,10 @@ type ImageURL struct {
 }
 
 type ChatCompletionRequest struct {
-	Model    string    `json:"model"`
-	Messages []Message `json:"messages"`
-	Stream   bool      `json:"stream"`
+	Model       string    `json:"model"`
+	Messages    []Message `json:"messages"`
+	Stream      bool      `json:"stream"`
+	Temperature float64   `json:"temperature"`
 }
 
 type ChatCompletionResponse struct {
@@ -56,154 +53,13 @@ type ChatCompletionResponse struct {
 }
 
 type LLMServer struct {
-	cmd *exec.Cmd
 }
 
-func (a *App) StartServer() error {
-	if a.server != nil || a.isStarting {
-		return nil
+func (a *App) getURL(botIndex int, path string) string {
+	if botIndex < 0 || botIndex >= len(a.config.Bots) {
+		return "http://127.0.0.1:8080" + path
 	}
-	a.isStarting = true
-	defer func() { a.isStarting = false }()
-
-	absModelPath, _ := filepath.Abs(filepath.Join("gguf", a.config.ModelPath))
-	if _, err := os.Stat(absModelPath); err != nil {
-		return fmt.Errorf("model not found: %s", absModelPath)
-	}
-
-	executable := "llama-server"
-	if runtime.GOOS == "windows" {
-		executable = "llama-server.exe"
-	}
-
-	llamaDir, _ := filepath.Abs("llama")
-	execPath := filepath.Join(llamaDir, executable)
-
-	if _, err := os.Stat(execPath); err != nil {
-		return fmt.Errorf("llama-server not found at %s. Please ensure the 'llama' folder contains the executable.", execPath)
-	}
-
-	args := []string{
-		"-m", absModelPath,
-		"--port", "8080",
-		"-ngl", fmt.Sprintf("%d", a.config.GPULayers),
-		"--host", "127.0.0.1",
-		"--jinja",
-	}
-
-	if a.config.ClipPath != "" {
-		clipPath, _ := filepath.Abs(filepath.Join("clip", a.config.ClipPath))
-		if _, err := os.Stat(clipPath); err == nil {
-			args = append(args, "--mmproj", clipPath)
-		}
-	}
-
-	a.logDebug(fmt.Sprintf("Starting server in %s: %s %s", llamaDir, execPath, strings.Join(args, " ")))
-
-	cmd := exec.Command(execPath, args...)
-	cmd.Dir = llamaDir // Set working directory so it finds DLLs
-
-	// Hide window on Windows
-	cmd.SysProcAttr = getSysProcAttr()
-
-	// Capture output for streaming
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
-
-	err := cmd.Start()
-	if err != nil {
-		return err
-	}
-
-	readyChan := make(chan bool, 1)
-
-	// Stream logs to frontend and watch for "listening" message
-	scanLogs := func(r io.Reader) {
-		scanner := bufio.NewScanner(r)
-		for scanner.Scan() {
-			line := scanner.Text()
-			wailsruntime.EventsEmit(a.ctx, "server-log", line)
-			if strings.Contains(line, "server is listening on") {
-				select {
-				case readyChan <- true:
-				default:
-				}
-			}
-		}
-	}
-
-	go scanLogs(stdout)
-	go scanLogs(stderr)
-
-	// Background HTTP health check
-	go func() {
-		for i := 0; i < 300; i++ {
-			resp, err := http.Get(a.config.ServerURL + "/health")
-			if err == nil {
-				status := resp.StatusCode
-				resp.Body.Close()
-				if status == http.StatusOK {
-					select {
-					case readyChan <- true:
-					default:
-					}
-					return
-				}
-			}
-			time.Sleep(1 * time.Second)
-		}
-	}()
-
-	// Wait for server to be ready (longer timeout for old hardware)
-	wailsruntime.EventsEmit(a.ctx, "server-status", "Booting...")
-
-	started := false
-	timeout := time.After(300 * time.Second)
-
-	select {
-	case <-readyChan:
-		started = true
-	case <-timeout:
-		started = false
-	}
-
-	// Double check if process is still running
-	if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-		return fmt.Errorf("llama-server exited prematurely. Check logs in the Server tab.")
-	}
-
-	if !started {
-		cmd.Process.Kill()
-		return fmt.Errorf("llama-server failed to start within 5 minutes")
-	}
-
-	wailsruntime.EventsEmit(a.ctx, "server-status", "Running")
-	a.server = &LLMServer{cmd: cmd}
-	return nil
-}
-
-func (a *App) StopServer() {
-	if a.server != nil && a.server.cmd != nil {
-		if runtime.GOOS == "windows" {
-			a.server.cmd.Process.Kill()
-		} else {
-			a.server.cmd.Process.Signal(os.Interrupt)
-		}
-		a.server = nil
-		a.logDebug("Server stopped")
-	}
-}
-
-func (a *App) IsServerRunning() bool {
-	return a.server != nil
-}
-
-func (a *App) isLocalServer() bool {
-	return a.config.ServerMode == "local"
-}
-
-func (a *App) getURL(path string) string {
-	url := a.config.ServerURL
+	url := a.config.Bots[botIndex].URL
 	if url == "" {
 		url = "http://127.0.0.1:8080"
 	}
@@ -226,6 +82,9 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 	if isCodeMode && !a.isCodeActive {
 		return nil // Task cancelled
 	}
+
+	botIndex := 0 // Default to main bot
+	targetBot := ""
 
 	// Intercept user commands (not from AI/Tool)
 	if !strings.HasPrefix(text, "(Tool) ") {
@@ -271,10 +130,21 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 			wailsruntime.EventsEmit(a.ctx, "done", "") // Signal UI that we're done processing command
 			return nil
 		}
-	}
 
-	if a.server == nil && a.isLocalServer() {
-		return fmt.Errorf("Server not running. Please start a llama_server from the Server tab.")
+		// Check for @botname
+		if strings.HasPrefix(trimmed, "@") {
+			parts := strings.SplitN(trimmed, " ", 2)
+			targetBot = strings.TrimPrefix(parts[0], "@")
+			if len(parts) > 1 {
+				text = parts[1]
+			}
+			for i, bot := range a.config.Bots {
+				if strings.EqualFold(bot.Name, targetBot) {
+					botIndex = i
+					break
+				}
+			}
+		}
 	}
 
 	var content []any
@@ -298,10 +168,11 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 	}
 
 	// Build context with memory
-	systemPrompt := a.config.Personality
+	bot := a.config.Bots[botIndex]
+	systemPrompt := bot.Personality
 	if isCodeMode {
 		// Use Code Prompt as System Prompt to ensure persistence
-		systemPrompt = a.config.Personality + "\n\n" + a.config.CodePrompt
+		systemPrompt = bot.Personality + "\n\n" + a.config.CodePrompt
 		systemPrompt = strings.ReplaceAll(systemPrompt, "[qa]", fmt.Sprintf("%d", a.config.MemoryLimit))
 		systemPrompt = strings.ReplaceAll(systemPrompt, "[tools]", a.toolHelp("brief_list", true))
 		// Only emit once at the very start of a session
@@ -332,13 +203,14 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 	messages = append(messages, Message{Role: "user", Content: content})
 
 	reqBody := ChatCompletionRequest{
-		Model:    "gpt-3.5-turbo", // llama-server often ignores this but expects it
-		Messages: messages,
-		Stream:   true,
+		Model:       "gpt-3.5-turbo", // llama-server often ignores this but expects it
+		Messages:    messages,
+		Stream:      true,
+		Temperature: bot.Temperature,
 	}
 
 	jsonBody, _ := json.Marshal(reqBody)
-	resp, err := http.Post(a.getURL("/v1/chat/completions"), "application/json", bytes.NewBuffer(jsonBody))
+	resp, err := http.Post(a.getURL(botIndex, "/v1/chat/completions"), "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return err
 	}
@@ -380,12 +252,89 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 	return nil
 }
 
+func (a *App) handleBotTriggers(tool, output string) {
+	for i, bot := range a.config.Bots {
+		if i == 0 {
+			continue // Main bot already handled
+		}
+		if bot.OnWrite && (tool == "filewrite" || tool == "splicefile") {
+			triggerMsg := fmt.Sprintf("Bot Trigger (OnWrite): File %s was modified.\nOutput: %s", tool, output)
+			// Send to triggered bot
+			go a.processMessageByBot(i, triggerMsg)
+		}
+	}
+}
+
+func (a *App) processMessageByBot(botIndex int, text string) {
+	bot := a.config.Bots[botIndex]
+	// Basic implementation of non-main bot processing
+	// We might want to save the reply to bot.ReplyFile if specified
+
+	reqBody := ChatCompletionRequest{
+		Model:       "gpt-3.5-turbo",
+		Messages:    []Message{{Role: "system", Content: bot.Personality}, {Role: "user", Content: text}},
+		Stream:      false,
+		Temperature: bot.Temperature,
+	}
+
+	jsonBody, _ := json.Marshal(reqBody)
+	resp, err := http.Post(a.getURL(botIndex, "/v1/chat/completions"), "application/json", bytes.NewBuffer(jsonBody))
+	if err != nil {
+		a.logChat("system", fmt.Sprintf("Error calling trigger bot %s: %v", bot.Name, err))
+		return
+	}
+	defer resp.Body.Close()
+
+	var chunk ChatCompletionResponse
+	if err := json.NewDecoder(resp.Body).Decode(&chunk); err == nil && len(chunk.Choices) > 0 {
+		reply := chunk.Choices[0].Message.Content
+		a.logChat("ai", fmt.Sprintf("[%s] %s", bot.Name, reply))
+		wailsruntime.EventsEmit(a.ctx, "bot-message", map[string]string{"name": bot.Name, "content": reply})
+
+		// If in code mode, send reply back to the main automation loop
+		if a.isCodeActive {
+			go a.processMessage(fmt.Sprintf("(Tool) Bot %s replied: %s", bot.Name, reply), "", true)
+		}
+
+		if bot.ReplyFile != "" {
+			fullPath, err := a.securePath(bot.ReplyFile)
+			if err == nil {
+				os.WriteFile(fullPath, []byte(reply), 0644)
+			}
+		}
+	}
+}
+
 func (a *App) handleToolCalls(response string) {
 	lines := strings.Split(response, "\n")
 	foundCommand := false
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
+
+		// Check for @botname: call
+		if strings.HasPrefix(line, "@") {
+			colonIdx := strings.Index(line, ":")
+			if colonIdx != -1 {
+				targetBot := strings.TrimPrefix(line[:colonIdx], "@")
+				args := strings.TrimSpace(line[colonIdx+1:])
+
+				botIndex := -1
+				for i, bot := range a.config.Bots {
+					if strings.EqualFold(bot.Name, targetBot) {
+						botIndex = i
+						break
+					}
+				}
+
+				if botIndex != -1 {
+					foundCommand = true
+					a.logChat("system", fmt.Sprintf("Bot Calling Bot: %s", targetBot))
+					go a.processMessageByBot(botIndex, args)
+					return
+				}
+			}
+		}
 
 		// Look for tool calls (e.g., ls: .)
 		colonIdx := strings.Index(line, ":")
@@ -404,6 +353,9 @@ func (a *App) handleToolCalls(response string) {
 
 				output := a.ExecuteTool(cmd, true)
 				a.logChat("tool-output", output)
+
+				// Handle triggers for other bots
+				a.handleBotTriggers(toolLower, output)
 
 				// Detect repetition
 				if cmd == a.lastToolCmd {

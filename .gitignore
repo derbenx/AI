@@ -1,3 +1,11 @@
 build/bin
 node_modules
 frontend/dist
+venv/
+dist/
+node_modules/
+build.log
+run.log
+debug.log
+!trash/
+!url/

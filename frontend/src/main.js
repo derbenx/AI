@@ -1,4 +1,4 @@
-import {GetSpecs, GetConfig, SaveSettings, ListModels, ListClips, GetBalancedLayers, SendMessage, ClearHistory, CheckServerExecutable, StartServer, StopServer, IsServerRunning, GetImageBase64, GetFileContent, ListAvailableTools, SendCodeMessage, UpdateTodoList, SetCodeActive, GetAINotes, UpdateAINotes, GetDefaultCodePrompt, TestTool, StartNewSession} from '../wailsjs/go/main/App';
+import {GetSpecs, GetConfig, SaveSettings, SendMessage, ClearHistory, GetImageBase64, GetFileContent, ListAvailableTools, SendCodeMessage, UpdateTodoList, SetCodeActive, GetAINotes, UpdateAINotes, GetDefaultCodePrompt, TestTool, StartNewSession} from '../wailsjs/go/main/App';
 import {EventsOn, BrowserOpenURL} from '../wailsjs/runtime/runtime';
 
 let currentImagePath = "";
@@ -61,7 +61,7 @@ async function handleFilePath(filePath) {
 
 // Sidebar Resize
 const handle = document.getElementById('resize-handle');
-const sidebar = document.getElementById('preview-sidebar');
+const sidebar = document.getElementById('sidebar-container');
 let isResizing = false;
 
 handle.addEventListener('mousedown', (e) => {
@@ -130,8 +130,12 @@ function appendMessage(role, content) {
 
 let currentAiMsgDiv = null;
 let currentAiContent = "";
+let currentTargetBot = "Main";
 
 EventsOn('token', (token) => {
+    updateBotStatus(currentTargetBot, 'typing');
+    if (token.includes('<think>')) updateBotStatus(currentTargetBot, 'thinking');
+
     if (!currentAiMsgDiv) {
         currentAiMsgDiv = appendMessage('ai', '');
     }
@@ -158,8 +162,10 @@ EventsOn('token', (token) => {
 });
 
 EventsOn('done', () => {
+    updateBotStatus(currentTargetBot, 'idle');
     currentAiMsgDiv = null;
     currentAiContent = "";
+    currentTargetBot = "Main";
 });
 
 EventsOn('code-finished', (msg) => {
@@ -187,38 +193,32 @@ EventsOn('internal-tool-message', (msg) => {
     appendMessage('tool', msg);
 });
 
-EventsOn('server-log', (log) => {
-    const logArea = document.getElementById('server-log');
-    logArea.value += log + "\n";
-    logArea.scrollTop = logArea.scrollHeight;
+EventsOn('bot-message', (data) => {
+    appendMessage('ai', `**[${data.name}]** ${data.content}`);
+    updateBotStatus(data.name, 'idle');
 });
-
-EventsOn('server-status', (status) => {
-    updateServerStatus(status);
-});
-
-document.getElementById('clear-log-btn').onclick = () => {
-    document.getElementById('server-log').value = "";
-};
 
 sendBtn.onclick = async () => {
     const text = chatInput.value.trim();
     if (!text && !currentImagePath) return;
 
-    const hasServer = await CheckServerExecutable();
-    if (!hasServer) {
-        appendMessage('ai', '### ⚠️ Missing Server or Backends\n\nPlease copy **ALL files** from the [llama.cpp zip](https://github.com/ggerganov/llama.cpp/releases) into the `llama/` folder.\n\nRequired:\n- `llama-server.exe`\n- `llama.dll`\n- `ggml-cpu.dll` (and other `ggml-*.dll` files)');
-        return;
+    if (text.startsWith('@')) {
+        currentTargetBot = text.split(' ')[0].substring(1);
+    } else {
+        currentTargetBot = "Main";
     }
 
     appendMessage('user', text);
     chatInput.value = "";
     chatInput.focus();
 
+    updateBotStatus(currentTargetBot, 'thinking');
+
     try {
         await SendMessage(text, currentImagePath);
     } catch (err) {
         appendMessage('ai', `Error: ${err}`);
+        updateBotStatus(currentTargetBot, 'offline');
     }
 };
 
@@ -261,57 +261,155 @@ async function initSettings() {
     }
 
     const config = await GetConfig();
-    document.getElementById('personality-input').value = config.personality;
     document.getElementById('memory-limit').value = config.memory_limit;
     document.getElementById('remember-first').checked = config.remember_first;
     document.getElementById('debug-log').checked = config.debug_log;
-    document.getElementById('gpu-layers').value = config.gpu_layers;
-    document.getElementById('server-url').value = config.server_url;
-    document.getElementById('server-mode').value = config.server_mode;
+    document.getElementById('code-prompt').value = config.code_prompt || "";
 
-    const updateModeUI = () => {
-        const mode = document.getElementById('server-mode').value;
-        const isLocal = mode === 'local';
-
-        document.querySelectorAll('.local-only').forEach(el => {
-            el.style.display = isLocal ? 'flex' : 'none';
-        });
-        document.querySelectorAll('.remote-only').forEach(el => {
-            el.style.display = isLocal ? 'none' : 'flex';
-        });
-    };
-    document.getElementById('server-mode').onchange = updateModeUI;
-    updateModeUI();
-
-    const models = await ListModels();
-    const modelSelect = document.getElementById('model-select');
-    models.forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m;
-        opt.textContent = m;
-        if (m === config.model_path) opt.selected = true;
-        modelSelect.appendChild(opt);
-    });
-
-    const clips = await ListClips();
-    const clipSelect = document.getElementById('clip-select');
-    clips.forEach(c => {
-        const opt = document.createElement('option');
-        opt.value = c;
-        opt.textContent = c;
-        if (c === config.clip_path) opt.selected = true;
-        clipSelect.appendChild(opt);
-    });
-
-    modelSelect.onchange = async () => {
-        const balanced = await GetBalancedLayers(modelSelect.value);
-        document.getElementById('balanced-recommend').textContent = balanced;
-    };
-    modelSelect.onchange();
-
-    await updateServerStatus();
+    await initBots(config.bots);
     await initCodeSetup();
 }
+
+async function updateBotStatus(botName, status) {
+    const statusEl = document.querySelector(`.bot-item[data-name="${botName}"] .bot-status`);
+    if (statusEl) {
+        statusEl.className = `bot-status ${status}`;
+    }
+}
+
+async function initBots(bots) {
+    const container = document.getElementById('bots-container');
+    const sidebarList = document.getElementById('bot-list');
+    container.innerHTML = "";
+    sidebarList.innerHTML = "";
+
+    // Always include User and System in CHAT sidebar
+    ['User', 'System'].forEach(name => {
+        const item = document.createElement('div');
+        item.className = 'bot-item';
+        item.dataset.name = name;
+        item.innerHTML = `<div class="bot-status idle"></div><span>${name}</span>`;
+        sidebarList.appendChild(item);
+    });
+
+    bots.forEach((bot, index) => {
+        // Sidebar item
+        const item = document.createElement('div');
+        item.className = 'bot-item';
+        item.dataset.name = bot.name;
+        item.innerHTML = `<div class="bot-status idle"></div><span>${bot.name}</span>`;
+        sidebarList.appendChild(item);
+
+        // Bot card in Bots tab
+        const card = document.createElement('div');
+        card.className = 'bot-card';
+        card.innerHTML = `
+            <div class="bot-card-header">
+                <input type="text" value="${bot.name}" placeholder="Bot Name" class="bot-name" style="font-weight: bold;">
+                ${index > 0 ? `<button class="remove-bot-btn" style="background-color: #d32f2f; padding: 4px 8px;">Remove</button>` : '<span>(Main Bot)</span>'}
+            </div>
+            <div class="setting-group">
+                <label>Server URL:</label>
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" value="${bot.url}" placeholder="http://127.0.0.1:8080" class="bot-url" style="flex: 1;">
+                    <button class="test-bot-btn">Test</button>
+                </div>
+            </div>
+            <div class="setting-group">
+                <label>Personality:</label>
+                <textarea class="bot-personality" style="height: 60px;">${bot.personality}</textarea>
+            </div>
+            <div style="display: flex; gap: 20px;">
+                <div class="setting-group" style="flex: 1;">
+                    <label>Temperature: <span class="temp-val">${bot.temperature}</span></label>
+                    <input type="range" min="0" max="2" step="0.1" value="${bot.temperature}" class="bot-temp">
+                </div>
+                <div class="setting-group" style="flex: 1;">
+                    <label>Triggers:</label>
+                    <label style="font-size: 0.8em;"><input type="checkbox" ${bot.on_write ? 'checked' : ''} class="bot-on-write"> On File Write</label>
+                    <input type="text" value="${bot.reply_file || ''}" placeholder="Reply to file (optional)" class="bot-reply-file" style="font-size: 0.8em;">
+                </div>
+            </div>
+        `;
+
+        card.querySelector('.bot-temp').oninput = (e) => {
+            card.querySelector('.temp-val').textContent = e.target.value;
+        };
+
+        if (index > 0) {
+            card.querySelector('.remove-bot-btn').onclick = () => {
+                card.remove();
+            };
+        }
+
+        card.querySelector('.test-bot-btn').onclick = async () => {
+            const url = card.querySelector('.bot-url').value;
+            try {
+                const resp = await fetch(url + "/health");
+                if (resp.ok) showNotification("Connected Successfully");
+                else showNotification("Server returned error: " + resp.status);
+            } catch (err) {
+                showNotification("Failed to connect: " + err);
+            }
+        };
+
+        container.appendChild(card);
+    });
+}
+
+document.getElementById('add-bot-btn').onclick = () => {
+    const bots = [];
+    document.querySelectorAll('.bot-card').forEach(card => {
+        bots.push({
+            name: card.querySelector('.bot-name').value,
+            url: card.querySelector('.bot-url').value,
+            personality: card.querySelector('.bot-personality').value,
+            temperature: parseFloat(card.querySelector('.bot-temp').value),
+            on_write: card.querySelector('.bot-on-write').checked,
+            reply_file: card.querySelector('.bot-reply-file').value
+        });
+    });
+    bots.push({
+        name: "New Bot",
+        url: "http://127.0.0.1:8080",
+        personality: "You are a helpful assistant.",
+        temperature: 0.7,
+        on_write: false,
+        reply_file: ""
+    });
+    initBots(bots);
+};
+
+document.getElementById('save-bots-btn').onclick = async () => {
+    const bots = [];
+    document.querySelectorAll('.bot-card').forEach(card => {
+        bots.push({
+            name: card.querySelector('.bot-name').value,
+            url: card.querySelector('.bot-url').value,
+            personality: card.querySelector('.bot-personality').value,
+            temperature: parseFloat(card.querySelector('.bot-temp').value),
+            on_write: card.querySelector('.bot-on-write').checked,
+            reply_file: card.querySelector('.bot-reply-file').value
+        });
+    });
+
+    const currentConfig = await GetConfig();
+    const config = { ...currentConfig, bots: bots };
+    const result = await SaveSettings(config);
+    showNotification(result);
+    // Refresh sidebar
+    initBots(bots);
+};
+
+document.getElementById('save-prompt-btn').onclick = async () => {
+    const currentConfig = await GetConfig();
+    const config = {
+        ...currentConfig,
+        code_prompt: document.getElementById('code-prompt').value
+    };
+    const result = await SaveSettings(config);
+    showNotification(result);
+};
 
 async function initCodeSetup() {
     const specs = await GetSpecs();
@@ -396,22 +494,6 @@ document.getElementById('save-code-setup-btn').onclick = async () => {
     showNotification(result);
 };
 
-document.getElementById('save-tools-btn').onclick = async () => {
-    const allowed_tools = [];
-    document.querySelectorAll('#tools-checkboxes input[type="checkbox"]').forEach(cb => {
-        if (cb.checked) allowed_tools.push(cb.value);
-    });
-
-    const currentConfig = await GetConfig();
-    const config = {
-        ...currentConfig,
-        code_prompt: document.getElementById('code-prompt').value,
-        allowed_tools: allowed_tools
-    };
-    const result = await SaveSettings(config);
-    showNotification(result);
-};
-
 document.getElementById('reset-prompt-btn').onclick = async () => {
     const defaultPrompt = await GetDefaultCodePrompt();
     document.getElementById('code-prompt').value = defaultPrompt;
@@ -426,6 +508,9 @@ document.getElementById('code-start-btn').onclick = async () => {
         return;
     }
 
+    currentTargetBot = "Main";
+    updateBotStatus(currentTargetBot, 'thinking');
+
     await StartNewSession();
     await UpdateTodoList(todo);
     await ClearHistory();
@@ -433,10 +518,6 @@ document.getElementById('code-start-btn').onclick = async () => {
     chatInput.disabled = true;
     sendBtn.disabled = true;
     document.getElementById('clear-btn').disabled = true;
-
-    // Switch to Main tab
-    const mainTabBtn = document.querySelector('button[onclick*="showTab(this, \'main\')"]');
-    if (mainTabBtn) window.showTab(mainTabBtn, 'main');
 
     isCodeRunning = true;
     document.getElementById('code-status').textContent = "Mode: Started";
@@ -458,14 +539,12 @@ document.getElementById('code-stop-btn').onclick = async () => {
 
 document.getElementById('code-resume-btn').onclick = async () => {
     const todo = document.getElementById('todo-list').value;
+    currentTargetBot = "Main";
+    updateBotStatus(currentTargetBot, 'thinking');
     await UpdateTodoList(todo);
     chatInput.disabled = true;
     sendBtn.disabled = true;
     document.getElementById('clear-btn').disabled = true;
-
-    // Switch to Main tab
-    const mainTabBtn = document.querySelector('button[onclick*="showTab(this, \'main\')"]');
-    if (mainTabBtn) window.showTab(mainTabBtn, 'main');
 
     isCodeRunning = true;
     document.getElementById('code-status').textContent = "Mode: Resumed";
@@ -489,79 +568,19 @@ async function stopCodeMode() {
     showNotification("Code mode stopped/finished.");
 }
 
-async function updateServerStatus(statusText) {
-    const running = await IsServerRunning();
-    const text = statusText || (running ? 'Running' : 'Stopped');
-
-    const isBooting = text === 'Booting...';
-
-    // Disable/Enable buttons
-    document.getElementById('start-server-btn').disabled = running || isBooting;
-    document.getElementById('stop-server-btn').disabled = !running && !isBooting;
-
-    const statusEl = document.getElementById('server-status-tab');
-    if (statusEl) {
-        statusEl.textContent = text;
-        if (text === 'Running') statusEl.style.color = '#44ff44';
-        else if (isBooting) statusEl.style.color = '#ffcc00';
-        else statusEl.style.color = '#ff4444';
-    }
-}
-
-document.getElementById('start-server-btn').onclick = async () => {
-    const hasServer = await CheckServerExecutable();
-    if (!hasServer) {
-        showNotification('llama-server.exe or ggml-*.dll missing in llama/ folder. Copy all files from the llama.cpp zip.');
-        return;
-    }
-    try {
-        await StartServer();
-        await updateServerStatus();
-    } catch (err) {
-        showNotification(`Error: ${err}`);
-    }
-};
-
-document.getElementById('stop-server-btn').onclick = async () => {
-    await StopServer();
-    await updateServerStatus();
-};
-
-document.getElementById('test-connection-btn').onclick = async () => {
-    const url = document.getElementById('server-url').value;
-    const status = document.getElementById('connection-status');
-    status.textContent = "Testing...";
-    status.style.color = "white";
-
-    try {
-        const resp = await fetch(url + "/health");
-        if (resp.ok) {
-            status.textContent = "✅ Connected Successfully";
-            status.style.color = "#44ff44";
-            showNotification("Connected Successfully");
-        } else {
-            status.textContent = `❌ Server returned error: ${resp.status}`;
-            status.style.color = "#ff4444";
-            showNotification("Server returned error");
-        }
-    } catch (err) {
-        status.textContent = `❌ Failed to connect: ${err}`;
-        status.style.color = "#ff4444";
-        showNotification("Failed to connect");
-    }
-};
-
 document.getElementById('save-settings-btn').onclick = async () => {
+    const allowed_tools = [];
+    document.querySelectorAll('#tools-checkboxes input[type="checkbox"]').forEach(cb => {
+        if (cb.checked) allowed_tools.push(cb.value);
+    });
+
+    const currentConfig = await GetConfig();
     const config = {
-        model_path: document.getElementById('model-select').value,
-        clip_path: document.getElementById('clip-select').value,
-        personality: document.getElementById('personality-input').value,
+        ...currentConfig,
         memory_limit: parseInt(document.getElementById('memory-limit').value),
         remember_first: document.getElementById('remember-first').checked,
         debug_log: document.getElementById('debug-log').checked,
-        gpu_layers: parseInt(document.getElementById('gpu-layers').value),
-        server_url: document.getElementById('server-url').value,
-        server_mode: document.getElementById('server-mode').value,
+        allowed_tools: allowed_tools
     };
     const result = await SaveSettings(config);
     showNotification(result);

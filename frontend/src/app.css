@@ -99,14 +99,69 @@ button:hover {
     background-color: #0062a3;
 }
 
-#preview-sidebar {
+#sidebar-container {
     width: 300px;
-    background-color: #252526;
-    border-left: 1px solid #333;
-    padding: 10px;
     display: flex;
     flex-direction: column;
+    border-left: 1px solid #333;
+    background-color: #1e1e1e;
+}
+
+#chat-sidebar, #preview-sidebar {
+    flex: 1;
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    background-color: #252526;
+}
+
+#chat-sidebar {
+    border-bottom: 1px solid #333;
+}
+
+#chat-sidebar h3, #preview-sidebar h3 {
+    margin-top: 0;
+    font-size: 1.1em;
+    color: #888;
+    border-bottom: 1px solid #333;
+    padding-bottom: 5px;
+    margin-bottom: 10px;
+}
+
+.bot-item {
+    display: flex;
+    align-items: center;
     gap: 10px;
+    margin-bottom: 8px;
+    font-size: 0.9em;
+}
+
+.bot-status {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background-color: #888; /* Idle - Grey */
+}
+
+.bot-status.offline { background-color: #f44336; } /* Red */
+.bot-status.idle { background-color: #ffffff; } /* White */
+.bot-status.thinking { background-color: #ffeb3b; } /* Yellow */
+.bot-status.typing { background-color: #4caf50; } /* Green */
+
+.bot-card {
+    background: #252525;
+    border: 1px solid #333;
+    border-radius: 4px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.bot-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
 }
 
 #resize-handle {

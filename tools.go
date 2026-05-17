@@ -146,6 +146,10 @@ func (a *App) ExecuteTool(command string, isAI bool) string {
 		output = a.toolLines(args)
 	case "filecopy":
 		output = a.toolFCopy(args)
+	case "splicefile":
+		output = a.toolSpliceFile(args)
+	case "listbots":
+		output = a.toolListBots()
 	case "mkdir":
 		output = a.toolMkdir(args)
 	case "help":
@@ -650,6 +654,18 @@ func (a *App) toolFCopy(args string) string {
 	return fmt.Sprintf("Copied '%s' to '%s'.", parts[0], parts[1])
 }
 
+func (a *App) toolListBots() string {
+	if len(a.config.Bots) == 0 {
+		return "No bots configured."
+	}
+	var sb strings.Builder
+	sb.WriteString("Configured Bots:\n")
+	for _, bot := range a.config.Bots {
+		sb.WriteString(fmt.Sprintf("- %s (%s)\n", bot.Name, bot.URL))
+	}
+	return sb.String()
+}
+
 func (a *App) toolMkdir(path string) string {
 	fullPath, err := a.securePath(path)
 	if err != nil {
@@ -661,6 +677,105 @@ func (a *App) toolMkdir(path string) string {
 		return fmt.Sprintf("Error: %v", err)
 	}
 	return fmt.Sprintf("Directory `%s` created. Use `ls: %s` to see it.", path, path)
+}
+
+func (a *App) toolSpliceFile(args string) string {
+	parts := a.splitArgs(args)
+	if len(parts) < 4 {
+		return "Error: splicefile requires <start_line> <end_line> <file> <content>. See 'help: splicefile'"
+	}
+
+	start, err := strconv.Atoi(parts[0])
+	if err != nil {
+		return "Error: start_line must be a number."
+	}
+	end, err := strconv.Atoi(parts[1])
+	if err != nil {
+		return "Error: end_line must be a number."
+	}
+	path := parts[2]
+
+	// Extract content similarly to toolFWrite
+	content := ""
+	searchStart := 0
+	startIdx := strings.Index(args, parts[0])
+	if startIdx != -1 {
+		searchStart = startIdx + len(parts[0])
+		// skip spaces
+		for searchStart < len(args) && args[searchStart] == ' ' {
+			searchStart++
+		}
+		// past end_line
+		endIdx := strings.Index(args[searchStart:], parts[1])
+		if endIdx != -1 {
+			searchStart += endIdx + len(parts[1])
+			for searchStart < len(args) && args[searchStart] == ' ' {
+				searchStart++
+			}
+			// past path
+			if searchStart < len(args) {
+				if args[searchStart] == '"' || args[searchStart] == '\'' {
+					quote := args[searchStart]
+					searchStart++
+					pathEnd := strings.Index(args[searchStart:], string(quote))
+					if pathEnd != -1 {
+						searchStart += pathEnd + 1
+					}
+				} else {
+					pathEnd := strings.Index(args[searchStart:], " ")
+					if pathEnd != -1 {
+						searchStart += pathEnd
+					}
+				}
+			}
+			content = strings.TrimLeft(args[searchStart:], " ")
+		}
+	} else {
+		content = strings.Join(parts[3:], " ")
+	}
+
+	fullPath, err := a.securePath(path)
+	if err != nil {
+		return fmt.Sprintf("Error: %v", err)
+	}
+
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		return fmt.Sprintf("Error reading file: %v", err)
+	}
+
+	lines := strings.Split(string(data), "\n")
+
+	// Adjust 1-based indexing to 0-based
+	startIdx0 := start - 1
+	endIdx0 := end - 1
+
+	if startIdx0 < 0 { startIdx0 = 0 }
+	if endIdx0 < startIdx0 - 1 { endIdx0 = startIdx0 - 1 }
+	if startIdx0 > len(lines) { startIdx0 = len(lines) }
+	if endIdx0 >= len(lines) { endIdx0 = len(lines) - 1 }
+
+	newLines := make([]string, 0)
+	newLines = append(newLines, lines[:startIdx0]...)
+	if content != "" {
+		newLines = append(newLines, strings.Split(content, "\n")...)
+	}
+	newLines = append(newLines, lines[endIdx0+1:]...)
+
+	backupPath, backedUp := a.backupFile(fullPath)
+	err = os.WriteFile(fullPath, []byte(strings.Join(newLines, "\n")), 0644)
+	if err != nil {
+		if backedUp {
+			a.restoreFile(backupPath, fullPath)
+		}
+		return fmt.Sprintf("Error writing file: %v", err)
+	}
+
+	msg := fmt.Sprintf("File `%s` spliced successfully.", path)
+	if backedUp {
+		msg += fmt.Sprintf(" (Backup saved to `%s`)", backupPath)
+	}
+	return msg
 }
 
 func (a *App) toolTodo(args string) string {
@@ -952,8 +1067,9 @@ func (a *App) getBuiltInTools() map[string]string {
 		"rm":        "remove/delete a file. Relative path only.\n Usage; rm: [file]",
 		"ls":        "list files in specified folder. Relative path only.\n Usage; ls: [file]",
 		"lines":     "number of lines in a file. Relative path only.\n Usage; lines: [file]\n Example; lines: url/web.htm",
-		"filecopy":  "Copy a file. Relative path only.\n Usage; filecopy: [orgfile] [destfile]",
-		"mkdir":     "Make a folder. Relative path only.\n Usage; mkdir: [folder]",
+		"filecopy":   "Copy a file. Relative path only.\n Usage; filecopy: [orgfile] [destfile]",
+		"splicefile": "Splice/replace lines in a file. 1-indexed. Relative path only.\n Usage; splicefile: [start] [end] [file] [content]\n Example; splicefile: 5 10 \"test.txt\" \"new content for lines 5-10\"",
+		"mkdir":      "Make a folder. Relative path only.\n Usage; mkdir: [folder]",
 		"memories":  "reads a persistent technical note.\n Usage; memories: [1-999] {note}\n Example; memories: 0 (Read all notes)\n Example; memories: 1 (Read note #1)\n Example; memories: 2 I'd rather be at the beach (saves note to slot #2)",
 		"todo":      "Manages a user made to-do list as a checklist\n Usage; todo: [1-999] {done/reset}\n Example; todo: 0 (shows entire list)\n Example; todo: 1 (shows task #1)\n Example; todo: 2 done (appends [done] to the end of line #2)\n Example; todo: 3 reset (removes [done] from the end of line #3)",
 		"url":       "downloads full HTML from url.\n Usage; url: [fullurl]",
@@ -962,6 +1078,7 @@ func (a *App) getBuiltInTools() map[string]string {
 		"run":       "runs a preset run command. returns log location to check for errors.\n Usage; run:",
 		"kill":      "runs a preset kill command for running program.\n Usage; kill:",
 		"help":      "lists info about other tools/commands.\n Usage; help: [tool]\n Example; help: (lists all tool names)\n Example; help: memories (describes how to use memories)",
+		"listbots":  "Lists all configured AI bots.\n Usage; listbots:",
 		"resume":    "resume code session, user use only\n Usage; resume: [message]",
 		"done":      "you are done coding.\n Usage; done: [msg]\n Example; done: I have finished the todo list!",
 	}

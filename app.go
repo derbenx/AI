@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -34,35 +33,6 @@ type App struct {
 // NewApp creates a new App application struct
 func NewApp() *App {
 	return &App{}
-}
-
-// startup is called when the app starts. The context is saved
-// so we can call the runtime methods
-func (a *App) CheckServerExecutable() bool {
-	executable := "llama-server"
-	if runtime.GOOS == "windows" {
-		executable = "llama-server.exe"
-	}
-	execPath := filepath.Join("llama", executable)
-	if _, err := os.Stat(execPath); err != nil {
-		return false
-	}
-
-	// Check for modular backends on Windows (newer llama.cpp versions)
-	if runtime.GOOS == "windows" {
-		files, err := os.ReadDir("llama")
-		if err == nil {
-			for _, f := range files {
-				if strings.HasPrefix(f.Name(), "ggml-") && strings.HasSuffix(f.Name(), ".dll") {
-					return true
-				}
-			}
-		}
-		// If no ggml-*.dll found, it might be an older static build, or it's missing backends.
-		// We'll return true but the log will show the error if it fails to load.
-	}
-
-	return true
 }
 
 func (a *App) getExecDir() string {
@@ -115,7 +85,6 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) shutdown(ctx context.Context) {
-	a.StopServer()
 }
 
 func (a *App) GetSpecs() SystemSpecs {
@@ -127,54 +96,13 @@ func (a *App) GetConfig() Config {
 }
 
 func (a *App) SaveSettings(config Config) string {
-	oldModel := a.config.ModelPath
-	oldLayers := a.config.GPULayers
-	oldClip := a.config.ClipPath
-	oldURL := a.config.ServerURL
-
 	a.config = config
 	err := SaveConfig(config)
 	if err != nil {
 		return fmt.Sprintf("Error saving config: %v", err)
 	}
 
-	// If the mode changed to remote, stop local server
-	if a.config.ServerMode == "remote" && a.IsServerRunning() {
-		a.StopServer()
-		return "Settings saved. Switched to remote mode (local server stopped)."
-	}
-
-	// If model or heavy settings changed, restart local server
-	if (oldModel != config.ModelPath || oldLayers != config.GPULayers || oldClip != config.ClipPath || oldURL != config.ServerURL) && a.IsServerRunning() && a.isLocalServer() {
-		a.StopServer()
-		go func() {
-			time.Sleep(1 * time.Second)
-			a.StartServer()
-		}()
-		return "Settings saved. Server is restarting with new model/settings..."
-	}
-
 	return "Settings saved"
-}
-
-func (a *App) ListModels() []string {
-	models, _ := ScanModels("gguf")
-	return models
-}
-
-func (a *App) ListClips() []string {
-	clips, _ := ScanModels("clip")
-	return clips
-}
-
-func (a *App) GetBalancedLayers(modelName string) int {
-	path := filepath.Join("gguf", modelName)
-	info, err := os.Stat(path)
-	if err != nil {
-		return 0
-	}
-	sizeGB := float64(info.Size()) / (1024 * 1024 * 1024)
-	return a.specs.CalculateBalancedGPU(sizeGB)
 }
 
 func (a *App) GetImageBase64(path string) (string, error) {

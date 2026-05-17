@@ -4,41 +4,48 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 )
 
+type BotConfig struct {
+	Name        string  `json:"name"`
+	URL         string  `json:"url"`
+	Personality string  `json:"personality"`
+	Temperature float64 `json:"temperature"`
+	OnWrite     bool    `json:"on_write"`
+	ReplyFile   string  `json:"reply_file"`
+}
+
 type Config struct {
-	ModelPath     string   `json:"model_path"`
-	ClipPath      string   `json:"clip_path"`
-	Personality   string   `json:"personality"`
-	MemoryLimit   int      `json:"memory_limit"`
-	RememberFirst bool     `json:"remember_first"`
-	DebugLog      bool     `json:"debug_log"`
-	GPULayers     int      `json:"gpu_layers"`
-	ServerURL     string   `json:"server_url"`
-	ServerMode    string   `json:"server_mode"` // "local" or "remote"
-	ProjectFolder string   `json:"project_folder"`
-	BuildCommand  string   `json:"build_command"`
-	RunCommand    string   `json:"run_command"`
-	KillCommand   string   `json:"kill_command"`
-	AppName      string   `json:"app_name"`
-	CodePrompt   string   `json:"code_prompt"`
-	AllowedTools []string `json:"allowed_tools"`
-	TodoList     string   `json:"todo_list"`
-	AINotes      string   `json:"ai_notes"`
+	Bots          []BotConfig `json:"bots"`
+	MemoryLimit   int         `json:"memory_limit"`
+	RememberFirst bool        `json:"remember_first"`
+	DebugLog      bool        `json:"debug_log"`
+	ProjectFolder string      `json:"project_folder"`
+	BuildCommand  string      `json:"build_command"`
+	RunCommand    string      `json:"run_command"`
+	KillCommand   string      `json:"kill_command"`
+	AppName       string      `json:"app_name"`
+	CodePrompt    string      `json:"code_prompt"`
+	AllowedTools  []string    `json:"allowed_tools"`
+	TodoList      string      `json:"todo_list"`
+	AINotes       string      `json:"ai_notes"`
 }
 
 var defaultConfig = Config{
-	Personality:   "You are a helpful AI assistant.",
+	Bots: []BotConfig{
+		{
+			Name:        "Main",
+			URL:         "http://127.0.0.1:8080",
+			Personality: "You are a helpful AI assistant.",
+			Temperature: 0.7,
+		},
+	},
 	MemoryLimit:   15,
 	RememberFirst: true,
 	DebugLog:      true,
-	GPULayers:     0,
-	ServerURL:     "http://127.0.0.1:8080",
-	ServerMode:    "local",
-	BuildCommand: "build {app}",
-	RunCommand:   "{app}",
-	KillCommand:  "kill {app}",
+	BuildCommand:  "build {app}",
+	RunCommand:    "{app}",
+	KillCommand:   "kill {app}",
 	CodePrompt:    "You are a programmer who likes to get the program working with minimal chatter! Remember you have a rolling window of [qa] prompt/replies, so make good use of your 'note' tool to persist technical data and memory so you don't forget what you are doing!\n\nThe automation loop continues as long as you keep calling tools. You MUST use a tool to get started!\nTry calling: \nhelp: to list commands\nls: to see the files you can work with.\ntodo: 0 to see the checklist.\nTest if it compiles with, build:\nRead the log file to check for errors with fread: build.log\n\nTo use a tool, start a new line with the tool name followed by a colon and its arguments. Direct tool calls only, no extra chatter on the same line:\n[tools]",
 	AllowedTools:  []string{},
 }
@@ -55,12 +62,9 @@ func LoadConfig() Config {
 		return defaultConfig
 	}
 
-	// Ensure critical defaults
-	if config.ServerURL == "" {
-		config.ServerURL = defaultConfig.ServerURL
-	}
-	if config.ServerMode == "" {
-		config.ServerMode = defaultConfig.ServerMode
+	// Ensure at least one bot exists
+	if len(config.Bots) == 0 {
+		config.Bots = defaultConfig.Bots
 	}
 
 	return config
@@ -86,17 +90,3 @@ func (a *App) logDebug(message string) {
 	f.WriteString(fmt.Sprintf("%s\n", message))
 }
 
-func ScanModels(dir string) ([]string, error) {
-	var models []string
-	files, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, file := range files {
-		if !file.IsDir() && (filepath.Ext(file.Name()) == ".gguf" || filepath.Ext(file.Name()) == ".bin") {
-			models = append(models, file.Name())
-		}
-	}
-	return models, nil
-}
