@@ -7,12 +7,13 @@ import (
 )
 
 type BotConfig struct {
-	Name        string  `json:"name"`
-	URL         string  `json:"url"`
-	Personality string  `json:"personality"`
-	Temperature float64 `json:"temperature"`
-	OnWrite     bool    `json:"on_write"`
-	ReplyFile   string  `json:"reply_file"`
+	Name              string  `json:"name"`
+	URL               string  `json:"url"`
+	Personality       string  `json:"personality"`
+	Temperature       float64 `json:"temperature"`
+	OnWrite           bool    `json:"on_write"`
+	TriggerCommand    string  `json:"trigger_command"`
+	SaveOutputCommand string  `json:"save_output_command"`
 }
 
 type Config struct {

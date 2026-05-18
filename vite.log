@@ -1,0 +1,9 @@
+
+> frontend@0.0.0 dev
+> vite --port 34115
+
+
+  VITE v3.2.11  ready in 242 ms
+
+  ➜  Local:   http://localhost:34115/
+  ➜  Network: use --host to expose

@@ -278,9 +278,11 @@ async function updateBotStatus(botName, status) {
 }
 
 async function initBots(bots) {
-    const container = document.getElementById('bots-container');
+    const mainContainer = document.getElementById('main-bot-container');
+    const addContainer = document.getElementById('additional-bots-container');
     const sidebarList = document.getElementById('bot-list');
-    container.innerHTML = "";
+    mainContainer.innerHTML = "";
+    addContainer.innerHTML = "";
     sidebarList.innerHTML = "";
 
     // Always include User and System in CHAT sidebar
@@ -327,7 +329,10 @@ async function initBots(bots) {
                 <div class="setting-group" style="flex: 1;">
                     <label>Triggers:</label>
                     <label style="font-size: 0.8em;"><input type="checkbox" ${bot.on_write ? 'checked' : ''} class="bot-on-write"> On File Write</label>
-                    <input type="text" value="${bot.reply_file || ''}" placeholder="Reply to file (optional)" class="bot-reply-file" style="font-size: 0.8em;">
+                    ${index === 0
+                        ? `<input type="text" value="${bot.trigger_command || ''}" placeholder="@botname [file]" class="bot-trigger-cmd" style="font-size: 0.8em;">`
+                        : `<input type="text" value="${bot.save_output_command || ''}" placeholder="filewrite: append check.txt [output]" class="bot-save-output" style="font-size: 0.8em;">`
+                    }
                 </div>
             </div>
         `;
@@ -353,20 +358,24 @@ async function initBots(bots) {
             }
         };
 
-        container.appendChild(card);
+        if (index === 0) mainContainer.appendChild(card);
+        else addContainer.appendChild(card);
     });
 }
 
 document.getElementById('add-bot-btn').onclick = () => {
     const bots = [];
     document.querySelectorAll('.bot-card').forEach(card => {
+        const triggerCmd = card.querySelector('.bot-trigger-cmd');
+        const saveOutput = card.querySelector('.bot-save-output');
         bots.push({
             name: card.querySelector('.bot-name').value,
             url: card.querySelector('.bot-url').value,
             personality: card.querySelector('.bot-personality').value,
             temperature: parseFloat(card.querySelector('.bot-temp').value),
             on_write: card.querySelector('.bot-on-write').checked,
-            reply_file: card.querySelector('.bot-reply-file').value
+            trigger_command: triggerCmd ? triggerCmd.value : "",
+            save_output_command: saveOutput ? saveOutput.value : ""
         });
     });
     bots.push({
@@ -383,13 +392,16 @@ document.getElementById('add-bot-btn').onclick = () => {
 document.getElementById('save-bots-btn').onclick = async () => {
     const bots = [];
     document.querySelectorAll('.bot-card').forEach(card => {
+        const triggerCmd = card.querySelector('.bot-trigger-cmd');
+        const saveOutput = card.querySelector('.bot-save-output');
         bots.push({
             name: card.querySelector('.bot-name').value,
             url: card.querySelector('.bot-url').value,
             personality: card.querySelector('.bot-personality').value,
             temperature: parseFloat(card.querySelector('.bot-temp').value),
             on_write: card.querySelector('.bot-on-write').checked,
-            reply_file: card.querySelector('.bot-reply-file').value
+            trigger_command: triggerCmd ? triggerCmd.value : "",
+            save_output_command: saveOutput ? saveOutput.value : ""
         });
     });
 

@@ -18,7 +18,6 @@ type App struct {
 	ctx            context.Context
 	config         Config
 	specs          SystemSpecs
-	server         *LLMServer
 	isStarting     bool
 	interactions   []Interaction
 	todoList       string

@@ -253,14 +253,34 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 }
 
 func (a *App) handleBotTriggers(tool, output string) {
-	for i, bot := range a.config.Bots {
-		if i == 0 {
-			continue // Main bot already handled
+	mainBot := a.config.Bots[0]
+	if mainBot.OnWrite && (tool == "filewrite" || tool == "splicefile") && mainBot.TriggerCommand != "" {
+		// Use TriggerCommand, replace [file] if present (very basic parsing)
+		cmd := mainBot.TriggerCommand
+		// Output often starts with "File `path` ..."
+		file := ""
+		if strings.HasPrefix(output, "File `") {
+			endIdx := strings.Index(output[6:], "`")
+			if endIdx != -1 {
+				file = output[6 : 6+endIdx]
+			}
 		}
-		if bot.OnWrite && (tool == "filewrite" || tool == "splicefile") {
-			triggerMsg := fmt.Sprintf("Bot Trigger (OnWrite): File %s was modified.\nOutput: %s", tool, output)
-			// Send to triggered bot
-			go a.processMessageByBot(i, triggerMsg)
+		cmd = strings.ReplaceAll(cmd, "[file]", file)
+
+		if strings.HasPrefix(cmd, "@") {
+			// Targeted message
+			parts := strings.SplitN(cmd, " ", 2)
+			target := strings.TrimPrefix(parts[0], "@")
+			msg := ""
+			if len(parts) > 1 {
+				msg = parts[1]
+			}
+			for i, bot := range a.config.Bots {
+				if strings.EqualFold(bot.Name, target) {
+					go a.processMessageByBot(i, msg)
+					break
+				}
+			}
 		}
 	}
 }
@@ -268,7 +288,7 @@ func (a *App) handleBotTriggers(tool, output string) {
 func (a *App) processMessageByBot(botIndex int, text string) {
 	bot := a.config.Bots[botIndex]
 	// Basic implementation of non-main bot processing
-	// We might want to save the reply to bot.ReplyFile if specified
+	// We might want to save the reply to bot.SaveOutputCommand if specified
 
 	reqBody := ChatCompletionRequest{
 		Model:       "gpt-3.5-turbo",
@@ -296,11 +316,9 @@ func (a *App) processMessageByBot(botIndex int, text string) {
 			go a.processMessage(fmt.Sprintf("(Tool) Bot %s replied: %s", bot.Name, reply), "", true)
 		}
 
-		if bot.ReplyFile != "" {
-			fullPath, err := a.securePath(bot.ReplyFile)
-			if err == nil {
-				os.WriteFile(fullPath, []byte(reply), 0644)
-			}
+		if bot.SaveOutputCommand != "" {
+			cmd := strings.ReplaceAll(bot.SaveOutputCommand, "[output]", reply)
+			a.ExecuteTool(cmd, false)
 		}
 	}
 }
