@@ -45,9 +45,11 @@ type ChatCompletionResponse struct {
 	Choices []struct {
 		Message struct {
 			Content string `json:"content"`
+			ReasoningContent string `json:"reasoning_content"`
 		} `json:"message"`
 		Delta struct {
 			Content string `json:"content"`
+			ReasoningContent string `json:"reasoning_content"`
 		} `json:"delta"`
 	} `json:"choices"`
 }
@@ -259,8 +261,16 @@ func (a *App) processSingleBotMessage(botIndex int, text string, imagePath strin
 		err = json.Unmarshal([]byte(data), &chunk)
 		if err == nil && len(chunk.Choices) > 0 {
 			content := chunk.Choices[0].Delta.Content
-			fullResponse += content
-			wailsruntime.EventsEmit(a.ctx, "token", map[string]string{"bot": bot.Name, "model": actualModel, "token": content})
+			reasoning := chunk.Choices[0].Delta.ReasoningContent
+
+			if reasoning != "" {
+				wailsruntime.EventsEmit(a.ctx, "token", map[string]string{"bot": bot.Name, "model": actualModel, "token": "", "reasoning": reasoning})
+			}
+
+			if content != "" {
+				fullResponse += content
+				wailsruntime.EventsEmit(a.ctx, "token", map[string]string{"bot": bot.Name, "model": actualModel, "token": content, "reasoning": ""})
+			}
 		}
 	}
 
@@ -338,8 +348,9 @@ func (a *App) processMessageByBot(botIndex int, text string) {
 	var chunk ChatCompletionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&chunk); err == nil && len(chunk.Choices) > 0 {
 		reply := chunk.Choices[0].Message.Content
+		reasoning := chunk.Choices[0].Message.ReasoningContent
 		a.logChat(bot.Name, reply)
-		wailsruntime.EventsEmit(a.ctx, "bot-message", map[string]string{"name": bot.Name, "content": reply})
+		wailsruntime.EventsEmit(a.ctx, "bot-message", map[string]string{"name": bot.Name, "content": reply, "reasoning": reasoning})
 
 		// If in code mode, send reply back to the main automation loop
 		if a.isCodeActive {

@@ -86,7 +86,7 @@ const chatWindow = document.getElementById('chat-window');
 const chatInput = document.getElementById('chat-input');
 const sendBtn = document.getElementById('send-btn');
 
-function appendMessage(role, content) {
+function appendMessage(role, content, reasoning = "") {
     const div = document.createElement('div');
     div.className = `message ${role}`;
     div.id = role === 'ai' ? 'latest-ai-msg' : '';
@@ -118,10 +118,23 @@ function appendMessage(role, content) {
         }
 
         const thinkingClass = showThinking ? "thinking-block" : "thinking-block hidden";
-        displayContent = displayContent.replace(/<think>([\s\S]*?)<\/think>/g, `<div class="${thinkingClass}">*(thinking)* $1</div>`);
-        // Handle unclosed think tag during streaming
-        if (displayContent.includes('<think>') && !displayContent.includes('</think>')) {
-            displayContent = displayContent.replace('<think>', `<div class="${thinkingClass}">*(thinking)* `) + '</div>';
+
+        let combinedReasoning = reasoning;
+        if (displayContent.includes('<think>')) {
+            const match = displayContent.match(/<think>([\s\S]*?)(?:<\/think>|$)/);
+            if (match) {
+                combinedReasoning = (combinedReasoning ? combinedReasoning + "\n" : "") + match[1];
+                displayContent = displayContent.replace(/<think>[\s\S]*?<\/think>/g, "");
+                if (displayContent.includes('<think>')) displayContent = displayContent.split('<think>')[0];
+            }
+        }
+
+        if (combinedReasoning) {
+            if (showThinking) {
+                displayContent = label + `<div class="${thinkingClass}">*(thinking)* ${combinedReasoning}</div>` + displayContent.substring(label.length);
+            } else {
+                displayContent = label + `<div style="font-style: italic; color: #888; font-size: 0.8em; margin-bottom: 5px;">-done thinking-</div>` + displayContent.substring(label.length);
+            }
         }
     }
 
@@ -143,25 +156,33 @@ let currentTargetBot = "Main";
 
 EventsOn('token', (data) => {
     const bot = data.bot;
-    const token = data.token;
+    const token = data.token || "";
+    const reasoning = data.reasoning || "";
 
     if (!activeAiMessages[bot]) {
-        // Set currentTargetBot temporarily so appendMessage uses correct label
         const oldTarget = currentTargetBot;
         currentTargetBot = bot;
         activeAiMessages[bot] = {
             div: appendMessage('ai', ''),
-            content: ""
+            content: "",
+            reasoning: "",
+            isThinking: false,
+            wasThinking: false
         };
         currentTargetBot = oldTarget;
     }
 
     const msg = activeAiMessages[bot];
     msg.content += token;
+    msg.reasoning += reasoning;
 
-    if (msg.content.includes('<think>') && !msg.content.includes('</think>')) {
+    const currentlyThinking = reasoning !== "" || (msg.content.includes('<think>') && !msg.content.includes('</think>'));
+    if (currentlyThinking) {
+        msg.isThinking = true;
+        msg.wasThinking = true;
         updateBotStatus(bot, 'thinking');
     } else {
+        msg.isThinking = false;
         updateBotStatus(bot, 'typing');
     }
 
@@ -171,16 +192,36 @@ EventsOn('token', (data) => {
     });
 
     const isAtBottom = chatWindow.scrollHeight - chatWindow.scrollTop <= chatWindow.clientHeight + 50;
-
     const showThinking = document.getElementById('toggle-thinking').checked;
-    const thinkingClass = showThinking ? "thinking-block" : "thinking-block hidden";
 
-    let displayContent = `(${bot}) ` + msg.content;
-    displayContent = displayContent.replace(/<think>([\s\S]*?)<\/think>/g, `<div class="${thinkingClass}">*(thinking)* $1</div>`);
-    // Handle unclosed think tag during streaming
-    if (displayContent.includes('<think>') && !displayContent.includes('</think>')) {
-        displayContent = displayContent.replace('<think>', `<div class="${thinkingClass}">*(thinking)* `) + '</div>';
+    let displayContent = `(${bot}) `;
+
+    // Add reasoning block
+    if (msg.reasoning || msg.content.includes('<think>')) {
+        const thinkingClass = showThinking ? "thinking-block" : "thinking-block hidden";
+        let rText = msg.reasoning;
+
+        // Extract from think tags if present in content
+        if (msg.content.includes('<think>')) {
+            const match = msg.content.match(/<think>([\s\S]*?)(?:<\/think>|$)/);
+            if (match) rText += match[1];
+        }
+
+        if (showThinking) {
+            displayContent += `<div class="${thinkingClass}">*(thinking)* ${rText}</div>`;
+        } else {
+            const label = msg.isThinking ? "-thinking-" : "-done thinking-";
+            displayContent += `<div class="thinking-block hidden">${label}</div>`; // Hidden but present
+            displayContent += `<div style="font-style: italic; color: #888; font-size: 0.8em; margin-bottom: 5px;">${label}</div>`;
+        }
     }
+
+    // Add main content (stripping think tags for clean display)
+    let cleanContent = msg.content.replace(/<think>[\s\S]*?<\/think>/g, "");
+    if (cleanContent.includes('<think>')) {
+        cleanContent = cleanContent.split('<think>')[0];
+    }
+    displayContent += cleanContent;
 
     msg.div.innerHTML = marked.parse(displayContent);
 
@@ -221,7 +262,7 @@ EventsOn('internal-tool-message', (msg) => {
 });
 
 EventsOn('bot-message', (data) => {
-    appendMessage('ai', `**[${data.name}]** ${data.content}`);
+    appendMessage('ai', `**[${data.name}]** ${data.content}`, data.reasoning);
     updateBotStatus(data.name, 'idle');
 });
 

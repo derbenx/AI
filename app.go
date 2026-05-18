@@ -206,31 +206,39 @@ func (a *App) GetDefaultCodePrompt() string {
 }
 
 func (a *App) GetBotModel(botIndex int) (string, error) {
+	// Try /props first
 	url := a.getURL(botIndex, "/props")
 	resp, err := http.Get(url)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	var props struct {
-		DefaultGenerationSettings struct {
-			Model string `json:"model"`
-		} `json:"default_generation_settings"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&props); err != nil {
-		return "", err
+	if err == nil {
+		defer resp.Body.Close()
+		var props struct {
+			DefaultGenerationSettings struct {
+				Model string `json:"model"`
+			} `json:"default_generation_settings"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&props); err == nil && props.DefaultGenerationSettings.Model != "" && props.DefaultGenerationSettings.Model != "." {
+			modelPath := strings.ReplaceAll(props.DefaultGenerationSettings.Model, "\\", "/")
+			return filepath.Base(modelPath), nil
+		}
 	}
 
-	// Extract just the filename from path
-	modelPath := props.DefaultGenerationSettings.Model
-	if modelPath == "" || modelPath == "." {
-		return "Unknown Model", nil
+	// Fallback to /v1/models (OpenAI compatible)
+	url = a.getURL(botIndex, "/v1/models")
+	resp, err = http.Get(url)
+	if err == nil {
+		defer resp.Body.Close()
+		var oaiModels struct {
+			Data []struct {
+				ID string `json:"id"`
+			} `json:"data"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&oaiModels); err == nil && len(oaiModels.Data) > 0 {
+			modelPath := strings.ReplaceAll(oaiModels.Data[0].ID, "\\", "/")
+			return filepath.Base(modelPath), nil
+		}
 	}
-	// llama.cpp might return Windows paths or Linux paths
-	modelPath = strings.ReplaceAll(modelPath, "\\", "/")
-	return filepath.Base(modelPath), nil
+
+	return "Unknown Model", nil
 }
 
 func (a *App) TestTool(command string) string {
