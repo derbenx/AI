@@ -395,11 +395,9 @@ async function initBots(bots) {
         }
 
         card.querySelector('.test-bot-btn').onclick = async () => {
-            const url = card.querySelector('.bot-url').value;
             try {
-                const resp = await fetch(url + "/health");
-                if (resp.ok) showNotification("Connected Successfully");
-                else showNotification("Server returned error: " + resp.status);
+                const model = await GetBotModel(index);
+                showNotification(`Success: ${model}`);
             } catch (err) {
                 showNotification("Failed to connect: " + err);
             }

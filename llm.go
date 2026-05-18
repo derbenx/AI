@@ -188,6 +188,7 @@ func (a *App) processSingleBotMessage(botIndex int, text string, imagePath strin
 
 	// Build context with memory
 	bot := a.config.Bots[botIndex]
+	actualModel, _ := a.GetBotModel(botIndex)
 	systemPrompt := bot.Personality
 	if isCodeMode {
 		// Use Code Prompt as System Prompt to ensure persistence
@@ -259,7 +260,7 @@ func (a *App) processSingleBotMessage(botIndex int, text string, imagePath strin
 		if err == nil && len(chunk.Choices) > 0 {
 			content := chunk.Choices[0].Delta.Content
 			fullResponse += content
-			wailsruntime.EventsEmit(a.ctx, "token", map[string]string{"bot": bot.Name, "token": content})
+			wailsruntime.EventsEmit(a.ctx, "token", map[string]string{"bot": bot.Name, "model": actualModel, "token": content})
 		}
 	}
 
@@ -317,9 +318,11 @@ func (a *App) processMessageByBot(botIndex int, text string) {
 	// Basic implementation of non-main bot processing
 	// We might want to save the reply to bot.SaveOutputCommand if specified
 
+	systemPrompt := bot.Personality
+
 	reqBody := ChatCompletionRequest{
 		Model:       "local-model",
-		Messages:    []Message{{Role: "system", Content: bot.Personality}, {Role: "user", Content: text}},
+		Messages:    []Message{{Role: "system", Content: systemPrompt}, {Role: "user", Content: text}},
 		Stream:      false,
 		Temperature: bot.Temperature,
 	}
@@ -335,7 +338,7 @@ func (a *App) processMessageByBot(botIndex int, text string) {
 	var chunk ChatCompletionResponse
 	if err := json.NewDecoder(resp.Body).Decode(&chunk); err == nil && len(chunk.Choices) > 0 {
 		reply := chunk.Choices[0].Message.Content
-		a.logChat("ai", fmt.Sprintf("[%s] %s", bot.Name, reply))
+		a.logChat(bot.Name, reply)
 		wailsruntime.EventsEmit(a.ctx, "bot-message", map[string]string{"name": bot.Name, "content": reply})
 
 		// If in code mode, send reply back to the main automation loop

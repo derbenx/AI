@@ -225,6 +225,11 @@ func (a *App) GetBotModel(botIndex int) (string, error) {
 
 	// Extract just the filename from path
 	modelPath := props.DefaultGenerationSettings.Model
+	if modelPath == "" || modelPath == "." {
+		return "Unknown Model", nil
+	}
+	// llama.cpp might return Windows paths or Linux paths
+	modelPath = strings.ReplaceAll(modelPath, "\\", "/")
 	return filepath.Base(modelPath), nil
 }
 

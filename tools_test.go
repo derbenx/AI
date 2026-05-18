@@ -288,3 +288,33 @@ func TestToolMemories(t *testing.T) {
 		t.Errorf("Expected 'first memory', got: %s", output)
 	}
 }
+
+func TestToolSpliceFile(t *testing.T) {
+	app, tempDir := setupTestApp(t)
+	defer os.RemoveAll(tempDir)
+
+	filePath := "splice_test.txt"
+	fullPath := filepath.Join(tempDir, filePath)
+	initialContent := "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
+	os.WriteFile(fullPath, []byte(initialContent), 0644)
+
+	// Replace lines 2-4
+	output := app.ExecuteTool("splicefile: 2 4 " + filePath + " New Line 2-4", false)
+	if !strings.Contains(output, "spliced successfully") {
+		t.Errorf("Expected success message, got: %s", output)
+	}
+
+	content, _ := os.ReadFile(fullPath)
+	expectedContent := "Line 1\nNew Line 2-4\nLine 5"
+	if string(content) != expectedContent {
+		t.Errorf("Expected %q, got %q", expectedContent, string(content))
+	}
+
+	// Test with quoted path and spaces in content
+	output = app.ExecuteTool(`splicefile: 2 2 "` + filePath + `" Updated Line 2`, false)
+	content, _ = os.ReadFile(fullPath)
+	expectedContent = "Line 1\nUpdated Line 2\nLine 5"
+	if string(content) != expectedContent {
+		t.Errorf("Expected %q, got %q", expectedContent, string(content))
+	}
+}
