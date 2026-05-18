@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"encoding/json"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -695,42 +696,62 @@ func (a *App) toolSpliceFile(args string) string {
 	}
 	path := parts[2]
 
-	// Extract content similarly to toolFWrite
+	// Content is everything after the 3rd argument (path).
+	// Since path might be quoted, we need a reliable way to find the end of the path in the raw args string.
 	content := ""
-	searchStart := 0
-	startIdx := strings.Index(args, parts[0])
-	if startIdx != -1 {
-		searchStart = startIdx + len(parts[0])
-		// skip spaces
-		for searchStart < len(args) && args[searchStart] == ' ' {
-			searchStart++
+
+	// We'll re-parse the raw string to find where the 3rd argument ends.
+	// We skip over the first 3 tokens.
+	tokenCount := 0
+	inQuotes := false
+	quoteChar := rune(0)
+	escaped := false
+
+	searchIdx := 0
+	for i, r := range args {
+		if escaped {
+			escaped = false
+			continue
 		}
-		// past end_line
-		endIdx := strings.Index(args[searchStart:], parts[1])
-		if endIdx != -1 {
-			searchStart += endIdx + len(parts[1])
-			for searchStart < len(args) && args[searchStart] == ' ' {
-				searchStart++
-			}
-			// past path
-			if searchStart < len(args) {
-				if args[searchStart] == '"' || args[searchStart] == '\'' {
-					quote := args[searchStart]
-					searchStart++
-					pathEnd := strings.Index(args[searchStart:], string(quote))
-					if pathEnd != -1 {
-						searchStart += pathEnd + 1
-					}
-				} else {
-					pathEnd := strings.Index(args[searchStart:], " ")
-					if pathEnd != -1 {
-						searchStart += pathEnd
-					}
+		if r == '\\' {
+			if i+1 < len(args) {
+				next := args[i+1]
+				if next == '"' || next == '\'' || next == '\\' {
+					escaped = true
+					continue
 				}
 			}
-			content = strings.TrimLeft(args[searchStart:], " ")
 		}
-	} else {
+
+		if (r == '"' || r == '\'') && !inQuotes {
+			inQuotes = true
+			quoteChar = r
+		} else if r == quoteChar && inQuotes {
+			inQuotes = false
+			quoteChar = rune(0)
+		} else if r == ' ' && !inQuotes {
+			// Found end of a token
+			if i > 0 && args[i-1] != ' ' {
+				tokenCount++
+				if tokenCount == 3 {
+					searchIdx = i + 1
+					break
+				}
+			}
+		}
+	}
+
+	// If it reached the end of the string while parsing the 3rd token
+	if tokenCount < 3 {
+		tokenCount++
+		if tokenCount == 3 {
+			// No content provided?
+			searchIdx = len(args)
+		}
+	}
+
+	content = strings.TrimLeft(args[searchIdx:], " ")
+	if content == "" && len(parts) >= 4 {
 		content = strings.Join(parts[3:], " ")
 	}
 
@@ -1102,15 +1123,20 @@ func (a *App) toolHelp(toolname string, isAI bool) string {
 	toolname = strings.TrimSuffix(strings.TrimSpace(toolname), ":")
 
 	if toolname == "brief_list" {
-		var lines []string
+		// Dynamic Jinja compatible JSON tool listing if requested by prompt
+		type ToolDef struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+		}
+		var toolDefs []ToolDef
+
 		for name, desc := range builtIns {
 			if isAI && !a.isToolAllowed(name) {
 				continue
 			}
-			summary := ""
 			firstLine := strings.Split(desc, "\n")[0]
-			summary = strings.TrimSpace(strings.TrimSuffix(firstLine, "."))
-			lines = append(lines, fmt.Sprintf("%s: (%s)", name, summary))
+			summary := strings.TrimSpace(strings.TrimSuffix(firstLine, "."))
+			toolDefs = append(toolDefs, ToolDef{Name: name, Description: summary})
 		}
 		tools, _ := a.ListAvailableTools()
 		for _, t := range tools {
@@ -1121,9 +1147,11 @@ func (a *App) toolHelp(toolname string, isAI bool) string {
 				continue
 			}
 			summary := strings.TrimSpace(strings.Split(t.Description, "\n")[0])
-			lines = append(lines, fmt.Sprintf("%s: (%s)", t.Name, summary))
+			toolDefs = append(toolDefs, ToolDef{Name: t.Name, Description: summary})
 		}
-		return strings.Join(lines, "\n")
+
+		jsonBytes, _ := json.MarshalIndent(toolDefs, "", "  ")
+		return string(jsonBytes)
 	}
 
 	if toolname != "" {

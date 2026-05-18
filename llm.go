@@ -76,15 +76,14 @@ func (a *App) SendCodeMessage(text string) error {
 }
 
 func (a *App) processMessage(text string, imagePath string, isCodeMode bool) error {
-	a.processingLock.Lock()
-	defer a.processingLock.Unlock()
-
+	// Root processMessage shouldn't hold the lock the whole time if it's going to spawn goroutines
 	if isCodeMode && !a.isCodeActive {
 		return nil // Task cancelled
 	}
 
 	botIndex := 0 // Default to main bot
 	targetBot := ""
+	allBots := false
 
 	// Intercept user commands (not from AI/Tool)
 	if !strings.HasPrefix(text, "(Tool) ") {
@@ -131,21 +130,41 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 			return nil
 		}
 
-		// Check for @botname
+		// Check for @botname or @all
 		if strings.HasPrefix(trimmed, "@") {
 			parts := strings.SplitN(trimmed, " ", 2)
 			targetBot = strings.TrimPrefix(parts[0], "@")
 			if len(parts) > 1 {
 				text = parts[1]
 			}
-			for i, bot := range a.config.Bots {
-				if strings.EqualFold(bot.Name, targetBot) {
-					botIndex = i
-					break
+
+			if strings.EqualFold(targetBot, "all") {
+				allBots = true
+			} else {
+				for i, bot := range a.config.Bots {
+					if strings.EqualFold(bot.Name, targetBot) {
+						botIndex = i
+						break
+					}
 				}
 			}
 		}
 	}
+
+	if allBots {
+		for i := range a.config.Bots {
+			go func(idx int) {
+				a.processSingleBotMessage(idx, text, imagePath, isCodeMode)
+			}(i)
+		}
+		return nil
+	}
+
+	return a.processSingleBotMessage(botIndex, text, imagePath, isCodeMode)
+}
+
+func (a *App) processSingleBotMessage(botIndex int, text string, imagePath string, isCodeMode bool) error {
+	// Only lock for parts that modify shared state like history or logs
 
 	var content []any
 	content = append(content, TextContent{Type: "text", Text: text})
@@ -189,7 +208,9 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 		a.logChat("tool", text)
 		wailsruntime.EventsEmit(a.ctx, "internal-tool-message", text)
 	} else {
-		a.logChat("user", text)
+		if botIndex == 0 { // Only log user message once for the main bot call in @all or normal mode
+			a.logChat("user", text)
+		}
 	}
 
 	messages := []Message{
@@ -197,13 +218,16 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 	}
 
 	// Add history
+	a.processingLock.Lock()
 	history := a.getHistoryForModel()
+	a.processingLock.Unlock()
+
 	messages = append(messages, history...)
 
 	messages = append(messages, Message{Role: "user", Content: content})
 
 	reqBody := ChatCompletionRequest{
-		Model:       "gpt-3.5-turbo", // llama-server often ignores this but expects it
+		Model:       "local-model", // llama-server often ignores this but expects it
 		Messages:    messages,
 		Stream:      true,
 		Temperature: bot.Temperature,
@@ -235,18 +259,21 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 		if err == nil && len(chunk.Choices) > 0 {
 			content := chunk.Choices[0].Delta.Content
 			fullResponse += content
-			wailsruntime.EventsEmit(a.ctx, "token", content)
+			wailsruntime.EventsEmit(a.ctx, "token", map[string]string{"bot": bot.Name, "token": content})
 		}
 	}
 
 	// Save to memory
+	a.processingLock.Lock()
 	a.addToHistory(text, fullResponse)
-	a.logChat("ai", fullResponse)
-	wailsruntime.EventsEmit(a.ctx, "done", fullResponse)
+	a.logChat(bot.Name, fullResponse)
+	a.processingLock.Unlock()
+
+	wailsruntime.EventsEmit(a.ctx, "done", map[string]string{"bot": bot.Name, "content": fullResponse})
 
 	// If in code mode, check for tool calls
 	if isCodeMode && a.isCodeActive {
-		a.handleToolCalls(fullResponse)
+		a.handleToolCalls(bot.Name, fullResponse)
 	}
 
 	return nil
@@ -291,7 +318,7 @@ func (a *App) processMessageByBot(botIndex int, text string) {
 	// We might want to save the reply to bot.SaveOutputCommand if specified
 
 	reqBody := ChatCompletionRequest{
-		Model:       "gpt-3.5-turbo",
+		Model:       "local-model",
 		Messages:    []Message{{Role: "system", Content: bot.Personality}, {Role: "user", Content: text}},
 		Stream:      false,
 		Temperature: bot.Temperature,
@@ -323,7 +350,7 @@ func (a *App) processMessageByBot(botIndex int, text string) {
 	}
 }
 
-func (a *App) handleToolCalls(response string) {
+func (a *App) handleToolCalls(botName, response string) {
 	lines := strings.Split(response, "\n")
 	foundCommand := false
 
@@ -405,7 +432,10 @@ func (a *App) handleToolCalls(response string) {
 				// Automatically send output back to AI
 				go func() {
 					if a.isCodeActive {
-						a.processMessage(feedback, "", true)
+						// Only main bot handles tool calls to keep it sequential
+						if strings.EqualFold(botName, a.config.Bots[0].Name) {
+							a.processMessage(feedback, "", true)
+						}
 					}
 				}()
 				return // Handle one command at a time to keep it sequential
@@ -417,7 +447,10 @@ func (a *App) handleToolCalls(response string) {
 		// If no command found, send feedback back to AI to keep the loop going
 		go func() {
 			if a.isCodeActive {
-				a.processMessage("(Tool) Error no tool called, did you mean help: ? Maybe check todo: ?", "", true)
+				// Only main bot loops back
+				if strings.EqualFold(botName, a.config.Bots[0].Name) {
+					a.processMessage("(Tool) Error no tool called, did you mean help: ? Maybe check todo: ?", "", true)
+				}
 			}
 		}()
 	}

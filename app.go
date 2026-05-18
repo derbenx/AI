@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -181,7 +183,8 @@ func (a *App) logChat(role, content string) {
 	timestamp := time.Now().Format("15:04:05")
 
 	roleLabel := role
-	switch strings.ToLower(role) {
+	roleLower := strings.ToLower(role)
+	switch roleLower {
 	case "user":
 		roleLabel = "(User)"
 	case "ai":
@@ -190,6 +193,9 @@ func (a *App) logChat(role, content string) {
 		roleLabel = "(Tool)"
 	case "system":
 		roleLabel = "(System)"
+	default:
+		// Use bot name
+		roleLabel = fmt.Sprintf("[%s]", role)
 	}
 
 	f.WriteString(fmt.Sprintf("[%s] %s %s\n", timestamp, roleLabel, content))
@@ -197,6 +203,29 @@ func (a *App) logChat(role, content string) {
 
 func (a *App) GetDefaultCodePrompt() string {
 	return defaultConfig.CodePrompt
+}
+
+func (a *App) GetBotModel(botIndex int) (string, error) {
+	url := a.getURL(botIndex, "/props")
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var props struct {
+		DefaultGenerationSettings struct {
+			Model string `json:"model"`
+		} `json:"default_generation_settings"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&props); err != nil {
+		return "", err
+	}
+
+	// Extract just the filename from path
+	modelPath := props.DefaultGenerationSettings.Model
+	return filepath.Base(modelPath), nil
 }
 
 func (a *App) TestTool(command string) string {

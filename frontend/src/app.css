@@ -244,6 +244,24 @@ button:hover {
     margin-top: 10px;
 }
 
+.tool-checkbox-item {
+    padding: 5px 10px;
+    background-color: #2d2d2d;
+    border: 1px solid #444;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+.tool-checkbox-item:hover {
+    background-color: #3d3d3d;
+}
+
+.tool-checkbox-item label {
+    cursor: pointer;
+    flex: 1;
+}
+
 #todo-list, #ai-notes {
     height: 150px;
     font-family: monospace;
@@ -279,6 +297,18 @@ input[type="text"], input[type="number"], select, textarea {
 
 .message.ai {
     background-color: #2d2d2d;
+}
+
+.thinking-block {
+    font-style: italic;
+    color: #aaa;
+    border-left: 2px solid #555;
+    padding-left: 10px;
+    margin: 5px 0;
+}
+
+.thinking-block.hidden {
+    display: none;
 }
 
 .message pre {

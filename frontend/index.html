@@ -24,8 +24,11 @@
                 <div id="controls">
                     <button id="send-btn">Send</button>
                     <button id="clear-btn">Clear Chat</button>
+                    <label style="font-size: 0.8em; display: flex; align-items: center; gap: 5px; margin-left: 10px; color: #888;">
+                        <input type="checkbox" id="toggle-thinking" checked> Show Thinking
+                    </label>
                     <div class="code-controls" style="margin-left: auto; display: flex; gap: 5px; align-items: center;">
-                        <button id="code-start-btn" style="padding: 5px 10px;">Start</button>
+                        <button id="code-start-btn" style="padding: 5px 10px;">Start Code</button>
                         <button id="code-stop-btn" style="padding: 5px 10px;">Stop</button>
                         <button id="code-resume-btn" style="padding: 5px 10px;">Resume</button>
                         <span id="code-status" style="font-size: 0.8em; font-weight: bold; color: #888; margin-left: 5px;">Mode: Stopped</span>
@@ -131,7 +134,7 @@
         <h2>Settings</h2>
         <div class="setting-group">
             <label>Enabled Tools:</label>
-            <div id="tools-checkboxes" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 10px;">
+            <div id="tools-checkboxes" style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px;">
                 <!-- Dynamically populated -->
             </div>
         </div>

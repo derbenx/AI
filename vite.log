@@ -3,7 +3,16 @@
 > vite --port 34115
 
 
-  VITE v3.2.11  ready in 242 ms
+  VITE v3.2.11  ready in 323 ms
 
   ➜  Local:   http://localhost:34115/
   ➜  Network: use --host to expose
+✘ [ERROR] No matching export in "wailsjs/go/main/App.js" for import "GetBotModel"
+
+    src/main.js:1:246:
+      1 │ ...TestTool, StartNewSession, GetBotModel} from '../wailsjs/go/main...
+        ╵                               ~~~~~~~~~~~
+
+Build failed with 1 error:
+src/main.js:1:246: ERROR: No matching export in "wailsjs/go/main/App.js" for import "GetBotModel"
+8:28:08 AM [vite] page reload src/main.js

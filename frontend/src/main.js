@@ -1,4 +1,4 @@
-import {GetSpecs, GetConfig, SaveSettings, SendMessage, ClearHistory, GetImageBase64, GetFileContent, ListAvailableTools, SendCodeMessage, UpdateTodoList, SetCodeActive, GetAINotes, UpdateAINotes, GetDefaultCodePrompt, TestTool, StartNewSession} from '../wailsjs/go/main/App';
+import {GetSpecs, GetConfig, SaveSettings, SendMessage, ClearHistory, GetImageBase64, GetFileContent, ListAvailableTools, SendCodeMessage, UpdateTodoList, SetCodeActive, GetAINotes, UpdateAINotes, GetDefaultCodePrompt, TestTool, StartNewSession, GetBotModel} from '../wailsjs/go/main/App';
 import {EventsOn, BrowserOpenURL} from '../wailsjs/runtime/runtime';
 
 let currentImagePath = "";
@@ -107,11 +107,21 @@ function appendMessage(role, content) {
     });
 
     let displayContent = label + content;
+    const showThinking = document.getElementById('toggle-thinking').checked;
+
     if (role === 'ai') {
-        displayContent = displayContent.replace(/<think>([\s\S]*?)<\/think>/g, '*(thinking) $1*');
+        if (content.startsWith('**[')) {
+            // bot-message from triggers already has a label
+        } else if (!label) {
+            label = `(${currentTargetBot}) `;
+            displayContent = label + content;
+        }
+
+        const thinkingClass = showThinking ? "thinking-block" : "thinking-block hidden";
+        displayContent = displayContent.replace(/<think>([\s\S]*?)<\/think>/g, `<div class="${thinkingClass}">*(thinking)* $1</div>`);
         // Handle unclosed think tag during streaming
         if (displayContent.includes('<think>') && !displayContent.includes('</think>')) {
-            displayContent = displayContent.replace('<think>', '*(thinking) ') + '*';
+            displayContent = displayContent.replace('<think>', `<div class="${thinkingClass}">*(thinking)* `) + '</div>';
         }
     }
 
@@ -128,18 +138,33 @@ function appendMessage(role, content) {
     return div;
 }
 
-let currentAiMsgDiv = null;
-let currentAiContent = "";
+let activeAiMessages = {}; // botName -> { div, content }
 let currentTargetBot = "Main";
 
-EventsOn('token', (token) => {
-    updateBotStatus(currentTargetBot, 'typing');
-    if (token.includes('<think>')) updateBotStatus(currentTargetBot, 'thinking');
+EventsOn('token', (data) => {
+    const bot = data.bot;
+    const token = data.token;
 
-    if (!currentAiMsgDiv) {
-        currentAiMsgDiv = appendMessage('ai', '');
+    if (!activeAiMessages[bot]) {
+        // Set currentTargetBot temporarily so appendMessage uses correct label
+        const oldTarget = currentTargetBot;
+        currentTargetBot = bot;
+        activeAiMessages[bot] = {
+            div: appendMessage('ai', ''),
+            content: ""
+        };
+        currentTargetBot = oldTarget;
     }
-    currentAiContent += token;
+
+    const msg = activeAiMessages[bot];
+    msg.content += token;
+
+    if (msg.content.includes('<think>') && !msg.content.includes('</think>')) {
+        updateBotStatus(bot, 'thinking');
+    } else {
+        updateBotStatus(bot, 'typing');
+    }
+
     marked.setOptions({
         breaks: true,
         gfm: true
@@ -147,25 +172,27 @@ EventsOn('token', (token) => {
 
     const isAtBottom = chatWindow.scrollHeight - chatWindow.scrollTop <= chatWindow.clientHeight + 50;
 
-    let displayContent = "(AI) " + currentAiContent;
-    displayContent = displayContent.replace(/<think>([\s\S]*?)<\/think>/g, '*(thinking) $1*');
+    const showThinking = document.getElementById('toggle-thinking').checked;
+    const thinkingClass = showThinking ? "thinking-block" : "thinking-block hidden";
+
+    let displayContent = `(${bot}) ` + msg.content;
+    displayContent = displayContent.replace(/<think>([\s\S]*?)<\/think>/g, `<div class="${thinkingClass}">*(thinking)* $1</div>`);
     // Handle unclosed think tag during streaming
     if (displayContent.includes('<think>') && !displayContent.includes('</think>')) {
-        displayContent = displayContent.replace('<think>', '*(thinking) ') + '*';
+        displayContent = displayContent.replace('<think>', `<div class="${thinkingClass}">*(thinking)* `) + '</div>';
     }
 
-    currentAiMsgDiv.innerHTML = marked.parse(displayContent);
+    msg.div.innerHTML = marked.parse(displayContent);
 
     if (isAtBottom) {
         chatWindow.scrollTop = chatWindow.scrollHeight;
     }
 });
 
-EventsOn('done', () => {
-    updateBotStatus(currentTargetBot, 'idle');
-    currentAiMsgDiv = null;
-    currentAiContent = "";
-    currentTargetBot = "Main";
+EventsOn('done', (data) => {
+    const bot = data.bot;
+    updateBotStatus(bot, 'idle');
+    delete activeAiMessages[bot];
 });
 
 EventsOn('code-finished', (msg) => {
@@ -249,6 +276,14 @@ document.getElementById('clear-btn').onclick = async () => {
     chatWindow.innerHTML = "";
 };
 
+document.getElementById('toggle-thinking').onchange = () => {
+    const show = document.getElementById('toggle-thinking').checked;
+    document.querySelectorAll('.thinking-block').forEach(el => {
+        if (show) el.classList.remove('hidden');
+        else el.classList.add('hidden');
+    });
+};
+
 // Settings logic
 async function initSettings() {
     const specs = await GetSpecs();
@@ -266,6 +301,7 @@ async function initSettings() {
     document.getElementById('debug-log').checked = config.debug_log;
     document.getElementById('code-prompt').value = config.code_prompt || "";
 
+    await refreshTools();
     await initBots(config.bots);
     await initCodeSetup();
 }
@@ -294,12 +330,23 @@ async function initBots(bots) {
         sidebarList.appendChild(item);
     });
 
-    bots.forEach((bot, index) => {
+    for (let index = 0; index < bots.length; index++) {
+        const bot = bots[index];
+        // Fetch model for tooltip
+        let modelInfo = "Connecting...";
+        let status = "idle";
+        try {
+            modelInfo = await GetBotModel(index);
+        } catch (err) {
+            modelInfo = "Offline/Unknown";
+            status = "offline";
+        }
+
         // Sidebar item
         const item = document.createElement('div');
         item.className = 'bot-item';
         item.dataset.name = bot.name;
-        item.innerHTML = `<div class="bot-status idle"></div><span>${bot.name}</span>`;
+        item.innerHTML = `<div class="bot-status ${status}"></div><span title="${modelInfo}">${bot.name}</span>`;
         sidebarList.appendChild(item);
 
         // Bot card in Bots tab
@@ -360,7 +407,7 @@ async function initBots(bots) {
 
         if (index === 0) mainContainer.appendChild(card);
         else addContainer.appendChild(card);
-    });
+    }
 }
 
 document.getElementById('add-bot-btn').onclick = () => {
@@ -384,7 +431,7 @@ document.getElementById('add-bot-btn').onclick = () => {
         personality: "You are a helpful assistant.",
         temperature: 0.7,
         on_write: false,
-        reply_file: ""
+        save_output_command: ""
     });
     initBots(bots);
 };
@@ -438,8 +485,6 @@ async function initCodeSetup() {
     document.getElementById('code-prompt').value = config.code_prompt || "";
     document.getElementById('todo-list').value = config.todo_list || "";
     document.getElementById('ai-notes').value = config.ai_notes || "";
-
-    await refreshTools();
 
     const todoInput = document.getElementById('todo-list');
     todoInput.oninput = async () => {
