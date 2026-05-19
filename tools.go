@@ -660,9 +660,10 @@ func (a *App) toolListBots() string {
 		return "No bots configured."
 	}
 	var sb strings.Builder
-	sb.WriteString("Configured Bots:\n")
-	for _, bot := range a.config.Bots {
-		sb.WriteString(fmt.Sprintf("- %s (%s)\n", bot.Name, bot.URL))
+	sb.WriteString("@all\n")
+	for i, bot := range a.config.Bots {
+		model, _ := a.GetBotModel(i)
+		sb.WriteString(fmt.Sprintf("@%s (%s)\n", bot.Name, model))
 	}
 	return sb.String()
 }

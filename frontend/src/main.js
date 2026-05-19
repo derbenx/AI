@@ -425,12 +425,20 @@ async function initBots(bots) {
                     <input type="range" min="0" max="2" step="0.1" value="${bot.temperature}" class="bot-temp">
                 </div>
                 <div class="setting-group" style="flex: 1;">
-                    ${index > 0 ? `
-                        <label>Triggers:</label>
-                        <label style="font-size: 0.8em;"><input type="checkbox" ${bot.on_write ? 'checked' : ''} class="bot-on-write"> On File Write</label>
-                        <input type="text" value="${bot.trigger_command || ''}" placeholder="Message to me: @botname [file]" class="bot-trigger-cmd" style="font-size: 0.8em; margin-top: 5px;">
-                        <input type="text" value="${bot.save_output_command || ''}" placeholder="Command on reply: filewrite: append check.txt [reply]" class="bot-save-output" style="font-size: 0.8em; margin-top: 5px;">
-                    ` : '<label>Triggers:</label><span style="font-size: 0.8em; color: #888;">(Primary bot triggers others)</span>'}
+                    <label>Triggers:</label>
+                    <div style="display: flex; flex-direction: column; gap: 5px;">
+                        ${index === 0 ? `
+                            <label style="font-size: 0.8em; display: flex; align-items: center; gap: 5px;">
+                                file write: <input type="checkbox" ${bot.trigger_enabled ? 'checked' : ''} class="bot-trigger-enabled">
+                            </label>
+                            <input type="text" value="${bot.trigger_cmd || ''}" placeholder="tool: @botname [file]" class="bot-trigger-cmd" style="font-size: 0.8em;">
+                        ` : `
+                            <label style="font-size: 0.8em; display: flex; align-items: center; gap: 5px;">
+                                on reply: <input type="checkbox" ${bot.trigger_enabled ? 'checked' : ''} class="bot-trigger-enabled">
+                            </label>
+                            <input type="text" value="${bot.trigger_cmd || ''}" placeholder="tool: fwrite: append error.txt [reply]" class="bot-trigger-cmd" style="font-size: 0.8em;">
+                        `}
+                    </div>
                 </div>
             </div>
         `;
@@ -473,16 +481,13 @@ async function initBots(bots) {
 document.getElementById('add-bot-btn').onclick = () => {
     const bots = [];
     document.querySelectorAll('.bot-card').forEach(card => {
-        const triggerCmd = card.querySelector('.bot-trigger-cmd');
-        const saveOutput = card.querySelector('.bot-save-output');
         bots.push({
             name: card.querySelector('.bot-name').value,
             url: card.querySelector('.bot-url').value,
             personality: card.querySelector('.bot-personality').value,
             temperature: parseFloat(card.querySelector('.bot-temp').value),
-            on_write: card.querySelector('.bot-on-write').checked,
-            trigger_command: triggerCmd ? triggerCmd.value : "",
-            save_output_command: saveOutput ? saveOutput.value : ""
+            trigger_enabled: card.querySelector('.bot-trigger-enabled').checked,
+            trigger_cmd: card.querySelector('.bot-trigger-cmd').value
         });
     });
     bots.push({
@@ -499,16 +504,13 @@ document.getElementById('add-bot-btn').onclick = () => {
 document.getElementById('save-bots-btn').onclick = async () => {
     const bots = [];
     document.querySelectorAll('.bot-card').forEach(card => {
-        const triggerCmd = card.querySelector('.bot-trigger-cmd');
-        const saveOutput = card.querySelector('.bot-save-output');
         bots.push({
             name: card.querySelector('.bot-name').value,
             url: card.querySelector('.bot-url').value,
             personality: card.querySelector('.bot-personality').value,
             temperature: parseFloat(card.querySelector('.bot-temp').value),
-            on_write: card.querySelector('.bot-on-write').checked,
-            trigger_command: triggerCmd ? triggerCmd.value : "",
-            save_output_command: saveOutput ? saveOutput.value : ""
+            trigger_enabled: card.querySelector('.bot-trigger-enabled').checked,
+            trigger_cmd: card.querySelector('.bot-trigger-cmd').value
         });
     });
 

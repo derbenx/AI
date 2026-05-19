@@ -14,6 +14,8 @@ type BotConfig struct {
 	OnWrite           bool    `json:"on_write"`
 	TriggerCommand    string  `json:"trigger_command"`
 	SaveOutputCommand string  `json:"save_output_command"`
+	TriggerEnabled    bool    `json:"trigger_enabled"`
+	TriggerCmd        string  `json:"trigger_cmd"`
 }
 
 type Config struct {

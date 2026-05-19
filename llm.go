@@ -295,6 +295,11 @@ func (a *App) handleBotTriggers(tool, output string) {
 		return
 	}
 
+	mainBot := a.config.Bots[0]
+	if !mainBot.TriggerEnabled || mainBot.TriggerCmd == "" {
+		return
+	}
+
 	// Output often starts with "File `path` ..."
 	file := ""
 	if strings.HasPrefix(output, "File `") {
@@ -304,14 +309,9 @@ func (a *App) handleBotTriggers(tool, output string) {
 		}
 	}
 
-	// Loop through secondary bots to see if they should be triggered
-	for i := 1; i < len(a.config.Bots); i++ {
-		bot := a.config.Bots[i]
-		if bot.OnWrite && bot.TriggerCommand != "" {
-			msg := strings.ReplaceAll(bot.TriggerCommand, "[file]", file)
-			go a.processMessageByBot(i, msg)
-		}
-	}
+	cmd := strings.ReplaceAll(mainBot.TriggerCmd, "[file]", file)
+	// Execute the command (which might be a call to another bot @botname)
+	go a.processMessage(cmd, "", a.isCodeActive)
 }
 
 func (a *App) processMessageByBot(botIndex int, text string) {
@@ -343,13 +343,14 @@ func (a *App) processMessageByBot(botIndex int, text string) {
 		a.logChat(bot.Name, reply)
 		wailsruntime.EventsEmit(a.ctx, "bot-message", map[string]string{"name": bot.Name, "content": reply, "reasoning": reasoning})
 
-		// If in code mode, send reply back to the main automation loop
+		// If in code mode, send reply back to the main automation loop (background info)
 		if a.isCodeActive {
 			go a.processMessage(fmt.Sprintf("(Tool) Bot %s replied: %s", bot.Name, reply), "", true)
 		}
 
-		if bot.SaveOutputCommand != "" {
-			cmd := strings.ReplaceAll(bot.SaveOutputCommand, "[reply]", reply)
+		// Handle tool bot triggers (on reply)
+		if bot.TriggerEnabled && bot.TriggerCmd != "" {
+			cmd := strings.ReplaceAll(bot.TriggerCmd, "[reply]", reply)
 			a.ExecuteTool(cmd, false)
 		}
 	}
