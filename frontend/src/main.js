@@ -136,6 +136,11 @@ function appendMessage(role, content, reasoning = "") {
                 displayContent = label + `<div style="font-style: italic; color: #888; font-size: 0.8em; margin-bottom: 5px;">-done thinking-</div>` + displayContent.substring(label.length);
             }
         }
+    } else if (role === 'tool') {
+        const showToolCalls = document.getElementById('toggle-tool-calls').checked;
+        if (!showToolCalls) {
+            div.classList.add('hidden');
+        }
     }
 
     div.innerHTML = marked.parse(displayContent);
@@ -166,6 +171,7 @@ EventsOn('token', (data) => {
             div: appendMessage('ai', ''),
             content: "",
             reasoning: "",
+            toolCalls: [],
             isThinking: false,
             wasThinking: false
         };
@@ -191,8 +197,28 @@ EventsOn('token', (data) => {
         gfm: true
     });
 
+    updateAiMessageDisplay(bot);
+});
+
+EventsOn('tool-calls', (data) => {
+    const bot = data.bot;
+    const calls = data.tool_calls;
+    if (activeAiMessages[bot]) {
+        activeAiMessages[bot].toolCalls = calls;
+        // Trigger a re-render by calling the token handler with empty token
+        // Use window.dispatchEvent or just call the same logic.
+        // For simplicity, let's just update the display content here too.
+        updateAiMessageDisplay(bot);
+    }
+});
+
+function updateAiMessageDisplay(bot) {
+    const msg = activeAiMessages[bot];
+    if (!msg) return;
+
     const isAtBottom = chatWindow.scrollHeight - chatWindow.scrollTop <= chatWindow.clientHeight + 50;
     const showThinking = document.getElementById('toggle-thinking').checked;
+    const showToolCalls = document.getElementById('toggle-tool-calls').checked;
 
     let displayContent = `(${bot}) `;
 
@@ -201,7 +227,6 @@ EventsOn('token', (data) => {
         const thinkingClass = showThinking ? "thinking-block" : "thinking-block hidden";
         let rText = msg.reasoning;
 
-        // Extract from think tags if present in content
         if (msg.content.includes('<think>')) {
             const match = msg.content.match(/<think>([\s\S]*?)(?:<\/think>|$)/);
             if (match) rText += match[1];
@@ -211,24 +236,33 @@ EventsOn('token', (data) => {
             displayContent += `<div class="${thinkingClass}">*(thinking)* ${rText}</div>`;
         } else {
             const label = msg.isThinking ? "-thinking-" : "-done thinking-";
-            displayContent += `<div class="thinking-block hidden">${label}</div>`; // Hidden but present
             displayContent += `<div style="font-style: italic; color: #888; font-size: 0.8em; margin-bottom: 5px;">${label}</div>`;
         }
     }
 
-    // Add main content (stripping think tags for clean display)
+    // Add main content
     let cleanContent = msg.content.replace(/<think>[\s\S]*?<\/think>/g, "");
     if (cleanContent.includes('<think>')) {
         cleanContent = cleanContent.split('<think>')[0];
     }
     displayContent += cleanContent;
 
+    // Add accumulated tool calls
+    if (msg.toolCalls && msg.toolCalls.length > 0) {
+        const toolClass = showToolCalls ? "tool-call-block" : "tool-call-block hidden";
+        let tcText = "\n\n**Tool Calls:**\n";
+        msg.toolCalls.forEach(tc => {
+            tcText += `\`${tc.function.name}(${tc.function.arguments})\`\n`;
+        });
+        displayContent += `<div class="${toolClass}">${tcText}</div>`;
+    }
+
     msg.div.innerHTML = marked.parse(displayContent);
 
     if (isAtBottom) {
         chatWindow.scrollTop = chatWindow.scrollHeight;
     }
-});
+}
 
 EventsOn('done', (data) => {
     const bot = data.bot;
@@ -320,6 +354,18 @@ document.getElementById('clear-btn').onclick = async () => {
 document.getElementById('toggle-thinking').onchange = () => {
     const show = document.getElementById('toggle-thinking').checked;
     document.querySelectorAll('.thinking-block').forEach(el => {
+        if (show) el.classList.remove('hidden');
+        else el.classList.add('hidden');
+    });
+};
+
+document.getElementById('toggle-tool-calls').onchange = () => {
+    const show = document.getElementById('toggle-tool-calls').checked;
+    document.querySelectorAll('.tool-call-block').forEach(el => {
+        if (show) el.classList.remove('hidden');
+        else el.classList.add('hidden');
+    });
+    document.querySelectorAll('.message.tool').forEach(el => {
         if (show) el.classList.remove('hidden');
         else el.classList.add('hidden');
     });

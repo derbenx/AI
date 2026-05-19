@@ -311,6 +311,30 @@ input[type="text"], input[type="number"], select, textarea {
     display: none;
 }
 
+.tool-call-block {
+    background-color: #1a1a1a;
+    border: 1px solid #007acc;
+    padding: 8px;
+    margin: 10px 0;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.tool-call-block.hidden {
+    display: none;
+}
+
+.message.tool {
+    background-color: #323232;
+    border-left: 4px solid #007acc;
+    font-size: 0.85em;
+    padding: 5px 10px;
+}
+
+.message.tool.hidden {
+    display: none;
+}
+
 .message pre {
     background-color: #000;
     padding: 10px;

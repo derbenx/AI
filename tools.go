@@ -1251,3 +1251,324 @@ func (a *App) toolExists(tool string) bool {
 
 	return false
 }
+
+func (a *App) GetToolDefinitions() []any {
+	var tools []any
+
+	// fileread
+	if a.isToolAllowed("fileread") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "fileread",
+				"description": "Reads a file with optional head/tail constraints.",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"filename": map[string]any{"type": "string"},
+						"location": map[string]any{
+							"type":        "string",
+							"enum":        []string{"head", "tail", "all"},
+							"description": "Read from start (head), end (tail), or entire file (all).",
+						},
+						"amount": map[string]any{
+							"type":        "string",
+							"description": "Amount to read. E.g., '10' for 10 lines, '100b' for 100 bytes. Ignored if location is 'all'.",
+						},
+					},
+					"required": []string{"filename", "location"},
+				},
+			},
+		})
+	}
+
+	// filewrite
+	if a.isToolAllowed("filewrite") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "filewrite",
+				"description": "Creates or modifies a file.",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"filename": map[string]any{"type": "string"},
+						"operation": map[string]any{
+							"type":        "string",
+							"enum":        []string{"replace", "append"},
+							"description": "Use 'replace' to overwrite or 'append' to add to the end.",
+						},
+						"content": map[string]any{"type": "string"},
+					},
+					"required": []string{"filename", "operation", "content"},
+				},
+			},
+		})
+	}
+
+	// rm
+	if a.isToolAllowed("rm") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "rm",
+				"description": "Deletes a file.",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"filename": map[string]any{"type": "string"},
+					},
+					"required": []string{"filename"},
+				},
+			},
+		})
+	}
+
+	// ls
+	if a.isToolAllowed("ls") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "ls",
+				"description": "Lists files in a directory or matches a glob pattern.",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"path": map[string]any{"type": "string", "description": "Directory path or glob pattern (e.g. 'src/*.go')"},
+					},
+					"required": []string{"path"},
+				},
+			},
+		})
+	}
+
+	// lines
+	if a.isToolAllowed("lines") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "lines",
+				"description": "Returns the number of lines in a file.",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"filename": map[string]any{"type": "string"},
+					},
+					"required": []string{"filename"},
+				},
+			},
+		})
+	}
+
+	// filecopy
+	if a.isToolAllowed("filecopy") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "filecopy",
+				"description": "Copies a file from source to destination.",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"src": map[string]any{"type": "string"},
+						"dst": map[string]any{"type": "string"},
+					},
+					"required": []string{"src", "dst"},
+				},
+			},
+		})
+	}
+
+	// splicefile
+	if a.isToolAllowed("splicefile") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "splicefile",
+				"description": "Replaces a range of lines in a file with new content.",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"start_line": map[string]any{"type": "integer", "description": "1-indexed starting line number"},
+						"end_line":   map[string]any{"type": "integer", "description": "1-indexed ending line number"},
+						"filename":   map[string]any{"type": "string"},
+						"content":    map[string]any{"type": "string"},
+					},
+					"required": []string{"start_line", "end_line", "filename", "content"},
+				},
+			},
+		})
+	}
+
+	// mkdir
+	if a.isToolAllowed("mkdir") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "mkdir",
+				"description": "Creates a new directory.",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"path": map[string]any{"type": "string"},
+					},
+					"required": []string{"path"},
+				},
+			},
+		})
+	}
+
+	// memories
+	if a.isToolAllowed("memories") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "memories",
+				"description": "Reads or updates persistent technical notes.",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"id":      map[string]any{"type": "integer", "description": "Note ID (1-1000). Use 0 to read all."},
+						"content": map[string]any{"type": "string", "description": "New content to save. Omit to just read."},
+					},
+					"required": []string{"id"},
+				},
+			},
+		})
+	}
+
+	// todo
+	if a.isToolAllowed("todo") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "todo",
+				"description": "Manages the to-do list checklist.",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"id":     map[string]any{"type": "integer", "description": "Task ID (line number). Use 0 to show all."},
+						"action": map[string]any{"type": "string", "enum": []string{"read", "done", "reset"}, "description": "Action to perform: 'read' (default), 'done', or 'reset'."},
+					},
+					"required": []string{"id"},
+				},
+			},
+		})
+	}
+
+	// url
+	if a.isToolAllowed("url") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "url",
+				"description": "Downloads full HTML from a URL.",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"url": map[string]any{"type": "string"},
+					},
+					"required": []string{"url"},
+				},
+			},
+		})
+	}
+
+	// urltxt
+	if a.isToolAllowed("urltxt") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "urltxt",
+				"description": "Downloads content from a URL and strips HTML tags.",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"url": map[string]any{"type": "string"},
+					},
+					"required": []string{"url"},
+				},
+			},
+		})
+	}
+
+	// build
+	if a.isToolAllowed("build") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "build",
+				"description": "Runs the preset build command.",
+				"parameters": map[string]any{
+					"type":       "object",
+					"properties": map[string]any{},
+				},
+			},
+		})
+	}
+
+	// run
+	if a.isToolAllowed("run") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "run",
+				"description": "Runs the preset run command.",
+				"parameters": map[string]any{
+					"type":       "object",
+					"properties": map[string]any{},
+				},
+			},
+		})
+	}
+
+	// kill
+	if a.isToolAllowed("kill") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "kill",
+				"description": "Kills the currently running process.",
+				"parameters": map[string]any{
+					"type":       "object",
+					"properties": map[string]any{},
+				},
+			},
+		})
+	}
+
+	// listbots
+	if a.isToolAllowed("listbots") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "listbots",
+				"description": "Lists all configured AI bots.",
+				"parameters": map[string]any{
+					"type":       "object",
+					"properties": map[string]any{},
+				},
+			},
+		})
+	}
+
+	// done
+	if a.isToolAllowed("done") {
+		tools = append(tools, map[string]any{
+			"type": "function",
+			"function": map[string]any{
+				"name":        "done",
+				"description": "Signals that you have finished the task.",
+				"parameters": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"message": map[string]any{"type": "string", "description": "Final summary message."},
+					},
+					"required": []string{"message"},
+				},
+			},
+		})
+	}
+
+	return tools
+}
