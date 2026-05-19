@@ -29,3 +29,23 @@ export function SendMessage(arg1:string,arg2:string):Promise<void>;
 export function StartServer():Promise<void>;
 
 export function StopServer():Promise<void>;
+
+export function ListAvailableTools():Promise<Array<any>>;
+
+export function SendCodeMessage(arg1:string):Promise<void>;
+
+export function UpdateTodoList(arg1:string):Promise<void>;
+
+export function SetCodeActive(arg1:boolean):Promise<void>;
+
+export function GetAINotes():Promise<string>;
+
+export function UpdateAINotes(arg1:string):Promise<void>;
+
+export function GetDefaultCodePrompt():Promise<string>;
+
+export function StartNewSession():Promise<void>;
+
+export function TestTool(arg1:string):Promise<string>;
+
+export function GetBotModel(arg1:number):Promise<string>;

@@ -93,3 +93,7 @@ export function StartNewSession() {
 export function TestTool(arg1) {
   return window['go']['main']['App']['TestTool'](arg1);
 }
+
+export function GetBotModel(arg1) {
+  return window['go']['main']['App']['GetBotModel'](arg1);
+}

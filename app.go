@@ -206,9 +206,13 @@ func (a *App) GetDefaultCodePrompt() string {
 }
 
 func (a *App) GetBotModel(botIndex int) (string, error) {
+	client := &http.Client{
+		Timeout: 2 * time.Second,
+	}
+
 	// Try /props first
 	url := a.getURL(botIndex, "/props")
-	resp, err := http.Get(url)
+	resp, err := client.Get(url)
 	if err == nil {
 		defer resp.Body.Close()
 		var props struct {
@@ -224,7 +228,7 @@ func (a *App) GetBotModel(botIndex int) (string, error) {
 
 	// Fallback to /v1/models (OpenAI compatible)
 	url = a.getURL(botIndex, "/v1/models")
-	resp, err = http.Get(url)
+	resp, err = client.Get(url)
 	if err == nil {
 		defer resp.Body.Close()
 		var oaiModels struct {

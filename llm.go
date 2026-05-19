@@ -291,34 +291,25 @@ func (a *App) processSingleBotMessage(botIndex int, text string, imagePath strin
 }
 
 func (a *App) handleBotTriggers(tool, output string) {
-	mainBot := a.config.Bots[0]
-	if mainBot.OnWrite && (tool == "filewrite" || tool == "splicefile") && mainBot.TriggerCommand != "" {
-		// Use TriggerCommand, replace [file] if present (very basic parsing)
-		cmd := mainBot.TriggerCommand
-		// Output often starts with "File `path` ..."
-		file := ""
-		if strings.HasPrefix(output, "File `") {
-			endIdx := strings.Index(output[6:], "`")
-			if endIdx != -1 {
-				file = output[6 : 6+endIdx]
-			}
-		}
-		cmd = strings.ReplaceAll(cmd, "[file]", file)
+	if tool != "filewrite" && tool != "splicefile" {
+		return
+	}
 
-		if strings.HasPrefix(cmd, "@") {
-			// Targeted message
-			parts := strings.SplitN(cmd, " ", 2)
-			target := strings.TrimPrefix(parts[0], "@")
-			msg := ""
-			if len(parts) > 1 {
-				msg = parts[1]
-			}
-			for i, bot := range a.config.Bots {
-				if strings.EqualFold(bot.Name, target) {
-					go a.processMessageByBot(i, msg)
-					break
-				}
-			}
+	// Output often starts with "File `path` ..."
+	file := ""
+	if strings.HasPrefix(output, "File `") {
+		endIdx := strings.Index(output[6:], "`")
+		if endIdx != -1 {
+			file = output[6 : 6+endIdx]
+		}
+	}
+
+	// Loop through secondary bots to see if they should be triggered
+	for i := 1; i < len(a.config.Bots); i++ {
+		bot := a.config.Bots[i]
+		if bot.OnWrite && bot.TriggerCommand != "" {
+			msg := strings.ReplaceAll(bot.TriggerCommand, "[file]", file)
+			go a.processMessageByBot(i, msg)
 		}
 	}
 }
@@ -358,7 +349,7 @@ func (a *App) processMessageByBot(botIndex int, text string) {
 		}
 
 		if bot.SaveOutputCommand != "" {
-			cmd := strings.ReplaceAll(bot.SaveOutputCommand, "[output]", reply)
+			cmd := strings.ReplaceAll(bot.SaveOutputCommand, "[reply]", reply)
 			a.ExecuteTool(cmd, false)
 		}
 	}

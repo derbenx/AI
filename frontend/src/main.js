@@ -373,30 +373,40 @@ async function initBots(bots) {
 
     for (let index = 0; index < bots.length; index++) {
         const bot = bots[index];
-        // Fetch model for tooltip
-        let modelInfo = "Connecting...";
-        let status = "idle";
-        try {
-            modelInfo = await GetBotModel(index);
-        } catch (err) {
-            modelInfo = "Offline/Unknown";
-            status = "offline";
-        }
 
-        // Sidebar item
+        // Sidebar item (Initial state)
         const item = document.createElement('div');
         item.className = 'bot-item';
         item.dataset.name = bot.name;
-        item.innerHTML = `<div class="bot-status ${status}"></div><span title="${modelInfo}">${bot.name}</span>`;
+        item.innerHTML = `<div class="bot-status offline"></div><span title="Connecting...">${bot.name}</span>`;
         sidebarList.appendChild(item);
+
+        // Background fetch for model info
+        (async (idx, name, el) => {
+            try {
+                const model = await GetBotModel(idx);
+                el.querySelector('.bot-status').className = 'bot-status idle';
+                el.querySelector('span').title = model;
+            } catch (err) {
+                el.querySelector('span').title = "Offline/Unknown";
+            }
+        })(index, bot.name, item);
 
         // Bot card in Bots tab
         const card = document.createElement('div');
         card.className = 'bot-card';
         card.innerHTML = `
             <div class="bot-card-header">
-                <input type="text" value="${bot.name}" placeholder="Bot Name" class="bot-name" style="font-weight: bold;">
-                ${index > 0 ? `<button class="remove-bot-btn" style="background-color: #d32f2f; padding: 4px 8px;">Remove</button>` : '<span>(Main Bot)</span>'}
+                <div style="display: flex; align-items: center; gap: 2px; flex: 1;">
+                    <span style="font-weight: bold; color: #888;">@</span>
+                    <input type="text" value="${bot.name}" placeholder="Bot Name" class="bot-name" style="font-weight: bold; flex: 1;">
+                </div>
+                ${index > 0 ? `
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 0.8em; color: #888;">(toolbot)</span>
+                        <button class="remove-bot-btn" style="background-color: #d32f2f; padding: 4px 8px;">Remove</button>
+                    </div>
+                ` : '<span>(Main AI/Coder)</span>'}
             </div>
             <div class="setting-group">
                 <label>Server URL:</label>
@@ -415,12 +425,12 @@ async function initBots(bots) {
                     <input type="range" min="0" max="2" step="0.1" value="${bot.temperature}" class="bot-temp">
                 </div>
                 <div class="setting-group" style="flex: 1;">
-                    <label>Triggers:</label>
-                    <label style="font-size: 0.8em;"><input type="checkbox" ${bot.on_write ? 'checked' : ''} class="bot-on-write"> On File Write</label>
-                    ${index === 0
-                        ? `<input type="text" value="${bot.trigger_command || ''}" placeholder="@botname [file]" class="bot-trigger-cmd" style="font-size: 0.8em;">`
-                        : `<input type="text" value="${bot.save_output_command || ''}" placeholder="filewrite: append check.txt [output]" class="bot-save-output" style="font-size: 0.8em;">`
-                    }
+                    ${index > 0 ? `
+                        <label>Triggers:</label>
+                        <label style="font-size: 0.8em;"><input type="checkbox" ${bot.on_write ? 'checked' : ''} class="bot-on-write"> On File Write</label>
+                        <input type="text" value="${bot.trigger_command || ''}" placeholder="Message to me: @botname [file]" class="bot-trigger-cmd" style="font-size: 0.8em; margin-top: 5px;">
+                        <input type="text" value="${bot.save_output_command || ''}" placeholder="Command on reply: filewrite: append check.txt [reply]" class="bot-save-output" style="font-size: 0.8em; margin-top: 5px;">
+                    ` : '<label>Triggers:</label><span style="font-size: 0.8em; color: #888;">(Primary bot triggers others)</span>'}
                 </div>
             </div>
         `;
@@ -439,8 +449,19 @@ async function initBots(bots) {
             try {
                 const model = await GetBotModel(index);
                 showNotification(`Success: ${model}`);
+                // Update sidebar tooltip and status
+                const sidebarItem = document.querySelector(`.bot-item[data-name="${bot.name}"]`);
+                if (sidebarItem) {
+                    sidebarItem.querySelector('.bot-status').className = 'bot-status idle';
+                    sidebarItem.querySelector('span').title = model;
+                }
             } catch (err) {
                 showNotification("Failed to connect: " + err);
+                const sidebarItem = document.querySelector(`.bot-item[data-name="${bot.name}"]`);
+                if (sidebarItem) {
+                    sidebarItem.querySelector('.bot-status').className = 'bot-status offline';
+                    sidebarItem.querySelector('span').title = "Offline/Unknown";
+                }
             }
         };
 
