@@ -1498,7 +1498,7 @@ func (a *App) GetToolDefinitions() []any {
 			"type": "function",
 			"function": map[string]any{
 				"name":        "build",
-				"description": "Runs the preset build command.",
+				"description": "Runs the preset build command. Detailed output is saved to 'build.log', which you should read with fileread if errors occur.",
 				"parameters": map[string]any{
 					"type":       "object",
 					"properties": map[string]any{},
@@ -1513,7 +1513,7 @@ func (a *App) GetToolDefinitions() []any {
 			"type": "function",
 			"function": map[string]any{
 				"name":        "run",
-				"description": "Runs the preset run command.",
+				"description": "Runs the preset run command. Detailed output is saved to 'run.log', which you should read with fileread if errors occur.",
 				"parameters": map[string]any{
 					"type":       "object",
 					"properties": map[string]any{},

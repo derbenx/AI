@@ -30,6 +30,7 @@ type Config struct {
 	AppName       string      `json:"app_name"`
 	CodePrompt    string      `json:"code_prompt"`
 	AllowedTools  []string    `json:"allowed_tools"`
+	HTTPTimeout   int         `json:"http_timeout"`
 	TodoList      string      `json:"todo_list"`
 	AINotes       string      `json:"ai_notes"`
 }
@@ -51,6 +52,7 @@ var defaultConfig = Config{
 	KillCommand:   "kill {app}",
 	CodePrompt:    "You are a programmer who likes to get the program working with minimal chatter! Check your todo tool for list of things that need to be done. You can ask other AI for help see listbots for details.",
 	AllowedTools:  []string{},
+	HTTPTimeout:   600,
 }
 
 func LoadConfig() Config {

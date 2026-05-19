@@ -403,6 +403,7 @@ async function initSettings() {
 
     const config = await GetConfig();
     document.getElementById('memory-limit').value = config.memory_limit;
+    document.getElementById('http-timeout').value = config.http_timeout || 600;
     document.getElementById('remember-first').checked = config.remember_first;
     document.getElementById('debug-log').checked = config.debug_log;
     document.getElementById('code-prompt').value = config.code_prompt || "";
@@ -754,6 +755,7 @@ document.getElementById('save-settings-btn').onclick = async () => {
     const config = {
         ...currentConfig,
         memory_limit: parseInt(document.getElementById('memory-limit').value),
+        http_timeout: parseInt(document.getElementById('http-timeout').value),
         remember_first: document.getElementById('remember-first').checked,
         debug_log: document.getElementById('debug-log').checked,
         allowed_tools: allowed_tools

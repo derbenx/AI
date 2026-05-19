@@ -286,7 +286,11 @@ func (a *App) processSingleBotMessageFull(botIndex int, text string, imagePath s
 
 	wailsruntime.EventsEmit(a.ctx, "bot-status", map[string]string{"bot": bot.Name, "status": "thinking"})
 
-	resp, err := http.Post(a.getURL(botIndex, "/v1/chat/completions"), "application/json", bytes.NewBuffer(jsonBody))
+	client := &http.Client{
+		Timeout: time.Duration(a.config.HTTPTimeout) * time.Second,
+	}
+
+	resp, err := client.Post(a.getURL(botIndex, "/v1/chat/completions"), "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
 		wailsruntime.EventsEmit(a.ctx, "bot-status", map[string]string{"bot": bot.Name, "status": "offline"})
 		return err
