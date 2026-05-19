@@ -239,13 +239,13 @@ func (a *App) processSingleBotMessageFull(botIndex int, text string, imagePath s
 			systemPrompt = strings.ReplaceAll(systemPrompt, "[tools]", a.toolHelp("brief_list", true))
 		}
 
-		// Only emit once at the very start of a session
-		if !strings.HasPrefix(text, "(Tool) ") {
+		// Only emit at the very start of a user or code-mode session
+		if text != "" && !strings.HasPrefix(text, "(Tool) ") {
 			wailsruntime.EventsEmit(a.ctx, "system-prompt-display", systemPrompt)
 		}
 	}
 
-	if !strings.HasPrefix(text, "(Tool) ") {
+	if text != "" && !strings.HasPrefix(text, "(Tool) ") {
 		a.logChat("system", systemPrompt)
 	}
 
@@ -253,7 +253,7 @@ func (a *App) processSingleBotMessageFull(botIndex int, text string, imagePath s
 		if strings.HasPrefix(text, "(Tool) ") {
 			a.logChat("tool", text)
 			wailsruntime.EventsEmit(a.ctx, "internal-tool-message", text)
-		} else {
+		} else if text != "" {
 			if botIndex == 0 { // Only log user message once for the main bot call in @all or normal mode
 				a.logChat("user", text)
 			}
@@ -288,8 +288,11 @@ func (a *App) processSingleBotMessageFull(botIndex int, text string, imagePath s
 	jsonBody, _ := json.Marshal(reqBody)
 	a.logDebug(fmt.Sprintf("LLM Request: %s", string(jsonBody)))
 
+	wailsruntime.EventsEmit(a.ctx, "bot-status", map[string]string{"bot": bot.Name, "status": "thinking"})
+
 	resp, err := http.Post(a.getURL(botIndex, "/v1/chat/completions"), "application/json", bytes.NewBuffer(jsonBody))
 	if err != nil {
+		wailsruntime.EventsEmit(a.ctx, "bot-status", map[string]string{"bot": bot.Name, "status": "offline"})
 		return err
 	}
 	defer resp.Body.Close()
@@ -298,6 +301,7 @@ func (a *App) processSingleBotMessageFull(botIndex int, text string, imagePath s
 	fullResponse := ""
 	var toolCalls []ToolCall
 	scanner := bufio.NewScanner(resp.Body)
+	firstToken := true
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -312,6 +316,11 @@ func (a *App) processSingleBotMessageFull(botIndex int, text string, imagePath s
 		var chunk ChatCompletionResponse
 		err = json.Unmarshal([]byte(data), &chunk)
 		if err == nil && len(chunk.Choices) > 0 {
+			if firstToken {
+				wailsruntime.EventsEmit(a.ctx, "token", map[string]string{"bot": bot.Name, "model": actualModel, "token": "", "reasoning": ""})
+				firstToken = false
+			}
+
 			delta := chunk.Choices[0].Delta
 			content := delta.Content
 			reasoning := delta.ReasoningContent
@@ -368,7 +377,7 @@ func (a *App) processSingleBotMessageFull(botIndex int, text string, imagePath s
 	a.logChat(bot.Name, fullResponse)
 	a.processingLock.Unlock()
 
-	wailsruntime.EventsEmit(a.ctx, "done", map[string]string{"bot": bot.Name, "content": fullResponse})
+	wailsruntime.EventsEmit(a.ctx, "done", map[string]any{"bot": bot.Name, "content": fullResponse, "tool_calls": toolCalls})
 
 	// If in code mode, check for tool calls
 	if isCodeMode && a.isCodeActive {

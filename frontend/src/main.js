@@ -249,12 +249,17 @@ function updateAiMessageDisplay(bot) {
 
     // Add accumulated tool calls
     if (msg.toolCalls && msg.toolCalls.length > 0) {
-        const toolClass = showToolCalls ? "tool-call-block" : "tool-call-block hidden";
-        let tcText = "\n\n**Tool Calls:**\n";
-        msg.toolCalls.forEach(tc => {
-            tcText += `\`${tc.function.name}(${tc.function.arguments})\`\n`;
-        });
-        displayContent += `<div class="${toolClass}">${tcText}</div>`;
+        if (showToolCalls) {
+            let tcText = "\n\n**Tool Calls:**\n";
+            msg.toolCalls.forEach(tc => {
+                tcText += `\`${tc.function.name}(${tc.function.arguments})\`\n`;
+            });
+            displayContent += `<div class="tool-call-block">${tcText}</div>`;
+        } else {
+            msg.toolCalls.forEach(tc => {
+                displayContent += `<div style="font-style: italic; color: #888; font-size: 0.8em; margin-bottom: 5px;">-tool call: ${tc.function.name}-</div>`;
+            });
+        }
     }
 
     msg.div.innerHTML = marked.parse(displayContent);
@@ -267,6 +272,14 @@ function updateAiMessageDisplay(bot) {
 EventsOn('done', (data) => {
     const bot = data.bot;
     updateBotStatus(bot, 'idle');
+
+    if (activeAiMessages[bot]) {
+        if (data.tool_calls && data.tool_calls.length > 0) {
+            activeAiMessages[bot].toolCalls = data.tool_calls;
+            updateAiMessageDisplay(bot);
+        }
+    }
+
     delete activeAiMessages[bot];
 });
 
@@ -298,6 +311,10 @@ EventsOn('internal-tool-message', (msg) => {
 EventsOn('bot-message', (data) => {
     appendMessage('ai', `**[${data.name}]** ${data.content}`, data.reasoning);
     updateBotStatus(data.name, 'idle');
+});
+
+EventsOn('bot-status', (data) => {
+    updateBotStatus(data.bot, data.status);
 });
 
 sendBtn.onclick = async () => {
@@ -361,10 +378,12 @@ document.getElementById('toggle-thinking').onchange = () => {
 
 document.getElementById('toggle-tool-calls').onchange = () => {
     const show = document.getElementById('toggle-tool-calls').checked;
-    document.querySelectorAll('.tool-call-block').forEach(el => {
-        if (show) el.classList.remove('hidden');
-        else el.classList.add('hidden');
-    });
+
+    // Re-render active messages to update detailed vs summary tool calls
+    for (const bot in activeAiMessages) {
+        updateAiMessageDisplay(bot);
+    }
+
     document.querySelectorAll('.message.tool').forEach(el => {
         if (show) el.classList.remove('hidden');
         else el.classList.add('hidden');

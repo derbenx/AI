@@ -7,5 +7,6 @@ node_modules/
 build.log
 run.log
 debug.log
+gemma-loader
 !trash/
 !url/
