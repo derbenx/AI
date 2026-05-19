@@ -587,11 +587,13 @@ document.getElementById('save-bots-btn').onclick = async () => {
     initBots(bots);
 };
 
-document.getElementById('save-prompt-btn').onclick = async () => {
+document.getElementById('save-code-btn').onclick = async () => {
     const currentConfig = await GetConfig();
     const config = {
         ...currentConfig,
-        code_prompt: document.getElementById('code-prompt').value
+        code_prompt: document.getElementById('code-prompt').value,
+        todo_list: document.getElementById('todo-list').value,
+        ai_notes: document.getElementById('ai-notes').value
     };
     const result = await SaveSettings(config);
     showNotification(result);
@@ -612,16 +614,6 @@ async function initCodeSetup() {
     document.getElementById('code-prompt').value = config.code_prompt || "";
     document.getElementById('todo-list').value = config.todo_list || "";
     document.getElementById('ai-notes').value = config.ai_notes || "";
-
-    const todoInput = document.getElementById('todo-list');
-    todoInput.oninput = async () => {
-        await UpdateTodoList(todoInput.value);
-    };
-
-    const notesInput = document.getElementById('ai-notes');
-    notesInput.oninput = async () => {
-        await UpdateAINotes(notesInput.value);
-    };
 }
 
 async function refreshTools() {

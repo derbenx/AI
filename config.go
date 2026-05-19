@@ -49,7 +49,7 @@ var defaultConfig = Config{
 	BuildCommand:  "build {app}",
 	RunCommand:    "{app}",
 	KillCommand:   "kill {app}",
-	CodePrompt:    "You are a programmer who likes to get the program working with minimal chatter! You are NOT GPT-4, you are a specialized coding model. Remember you have a rolling window of [qa] prompt/replies, so make good use of your 'note' tool to persist technical data and memory so you don't forget what you are doing!\n\nThe automation loop continues as long as you keep calling tools. You MUST use a tool to get started!\nTry calling: \nhelp: to list commands\nls: to see the files you can work with.\ntodo: 0 to see the checklist.\nTest if it compiles with, build:\nRead the log file to check for errors with fread: build.log\n\nTo use a tool, start a new line with the tool name followed by a colon and its arguments. Direct tool calls only, no extra chatter on the same line:\n[tools]",
+	CodePrompt:    "You are a programmer who likes to get the program working with minimal chatter! Check your todo tool for list of things that need to be done. You can ask other AI for help see listbots for details.",
 	AllowedTools:  []string{},
 }
 

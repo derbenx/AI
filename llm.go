@@ -140,11 +140,7 @@ func (a *App) processMessage(text string, imagePath string, isCodeMode bool) err
 		if isCommand {
 			if strings.ToLower(tool) == "resume" {
 				a.isCodeActive = true
-				// Release lock before recursive call to avoid deadlock
-				a.processingLock.Unlock()
-				err := a.processMessage(args, "", true)
-				a.processingLock.Lock()
-				return err
+				return a.processMessage(args, "", true)
 			}
 			output := a.ExecuteTool(text, false)
 			a.logChat("tool-output", output)
